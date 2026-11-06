@@ -184,7 +184,7 @@ fun resolveGlassGeometry(
 
         MioGlassRole.SHEET -> MioGlassGeometry(
             blurRadius = 0.dp, // 弹层在独立窗口：模糊由 ModalWindowBlurBehindEffect 提供
-            fillAlpha = (if (dark) 0.64f else 0.58f) + noBlurBoost * 0.5f,
+            fillAlpha = (if (dark) 0.84f else 0.80f) + noBlurBoost * 0.5f,
             tintMix = 0.035f,
             noiseFactor = 0.02f,
             shadowElevation = 0.dp,

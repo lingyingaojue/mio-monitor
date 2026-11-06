@@ -5,7 +5,6 @@ import com.a41probe.monitor.ui.components.GlassTransparency
 import com.a41probe.monitor.ui.glass.MioGlassRole
 import com.a41probe.monitor.ui.glass.prismalCardTintAlpha
 import com.a41probe.monitor.ui.glass.resolveGlassCapability
-import com.a41probe.monitor.ui.glass.resolveGlassEdgeDispersion
 import com.a41probe.monitor.ui.glass.usesPrismalCardGlass
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -14,7 +13,7 @@ import org.junit.Test
 
 /**
  * Mio 3.8：PrismalAGSL 卡片玻璃接入的纯 JVM 单测。
- * 覆盖 tint 浓度、启用门槛、Haze 降级边缘色散强度。
+ * 覆盖 tint 浓度与 Prismal 启用门槛。
  */
 class PrismalCardPolicyTest {
 
@@ -30,7 +29,7 @@ class PrismalCardPolicyTest {
         var lastLight = 2f
         levels.forEach { level ->
             val alpha = prismalCardTintAlpha(dark = false, level = level)
-            assertTrue("$level 亮度 tint 太脏：$alpha", alpha in 0.03f..0.20f)
+            assertTrue("$level 亮度 tint 越界：$alpha", alpha in 0f..0.12f)
             assertTrue("$level 应逐级更透", alpha < lastLight)
             lastLight = alpha
         }
@@ -38,11 +37,17 @@ class PrismalCardPolicyTest {
         levels.forEach { level ->
             val light = prismalCardTintAlpha(dark = false, level = level)
             val dark = prismalCardTintAlpha(dark = true, level = level)
-            assertTrue("深色 tint 应略高于浅色", dark > light)
-            assertTrue("深色也要透明", dark <= 0.20f)
+            if (level == GlassTransparency.ULTRA) {
+                org.junit.Assert.assertEquals(0f, light, 0.0001f)
+                org.junit.Assert.assertEquals(0f, dark, 0.0001f)
+            } else {
+                assertTrue("深色 tint 应略高于浅色", dark > light)
+            }
+            if (level != GlassTransparency.ULTRA) assertTrue("深色也要透明", dark <= 0.12f)
         }
         // 参考档（低）必须足够透，不能回到白雾
-        assertTrue(prismalCardTintAlpha(false, GlassTransparency.LOW) <= 0.10f)
+        assertTrue(prismalCardTintAlpha(false, GlassTransparency.LOW) <= 0.05f)
+        assertEquals(0f, prismalCardTintAlpha(false, GlassTransparency.ULTRA), 0.0001f)
     }
 
     @Test
@@ -65,23 +70,11 @@ class PrismalCardPolicyTest {
     }
 
     @Test
-    fun hazeFallbackEdgeDispersionIsGatedByRealtimeBlur() {
-        assertTrue(resolveGlassEdgeDispersion(MioGlassRole.CARD, realtimeBlur = true) >= 0.20f)
-        assertTrue(resolveGlassEdgeDispersion(MioGlassRole.DOCK, realtimeBlur = true) >= 0.20f)
-        assertTrue(resolveGlassEdgeDispersion(MioGlassRole.CHROME, realtimeBlur = true) >= 0.10f)
-        assertTrue(resolveGlassEdgeDispersion(MioGlassRole.INDICATOR, realtimeBlur = true) >= 0.10f)
-        assertEquals(0f, resolveGlassEdgeDispersion(MioGlassRole.SHEET, realtimeBlur = true), 0.0001f)
-        MioGlassRole.entries.forEach { role ->
-            assertEquals(0f, resolveGlassEdgeDispersion(role, realtimeBlur = false), 0.0001f)
-        }
-    }
-
-    @Test
     fun cardDispersionConstantsMatchLibraryParameters() {
-        // 这些值是 PrismalGlassSurface 调用点的契约：折射要夸张、色散要可见
+        // 这些值是卡片 drawPrismalGlass 调用点的契约：tint 只做可读性，不能染白
         val cardTint = prismalCardTintAlpha(dark = false, level = GlassTransparency.MEDIUM)
         assertTrue(cardTint < prismalCardTintAlpha(dark = true, level = GlassTransparency.MEDIUM))
         // 低档 tint 不超过 0.10，配合 Prismal 的 vibrancy 保证"透"
-        assertTrue(prismalCardTintAlpha(dark = false, level = GlassTransparency.LOW) <= 0.10f)
+        assertTrue(prismalCardTintAlpha(dark = false, level = GlassTransparency.LOW) <= 0.05f)
     }
 }

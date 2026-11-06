@@ -50,7 +50,7 @@ import com.a41probe.monitor.ui.components.ProbeButton
 import com.a41probe.monitor.ui.components.ScrollAware
 import com.a41probe.monitor.ui.components.SpecialFace
 import com.a41probe.monitor.ui.glass.LocalMioChromeInsets
-import com.a41probe.monitor.ui.glass.scaledGlassFillAlpha
+import com.a41probe.monitor.ui.glass.MioDialogContainerAlpha
 import com.a41probe.monitor.ui.glass.currentGlassCapability
 import com.a41probe.monitor.ui.theme.Ink
 import com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect
@@ -397,7 +397,7 @@ private fun AddDeviceDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = dialogShape,
-        containerColor = Ink.glassFill.copy(alpha = scaledGlassFillAlpha(0.68f)),
+        containerColor = Ink.glassFill.copy(alpha = MioDialogContainerAlpha),
         titleContentColor = Ink.tx,
         textContentColor = Ink.tx2,
         title = {

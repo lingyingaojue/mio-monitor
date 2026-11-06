@@ -125,7 +125,7 @@ private val GLASS_TRANSPARENCY_LEVELS = listOf(
     GlassTransparency.HIGH,
     GlassTransparency.ULTRA,
 )
-private val GLASS_TRANSPARENCY_LABELS = listOf("低", "中", "高", "极高")
+private val GLASS_TRANSPARENCY_LABELS = listOf("低", "中", "高", "全透")
 private val BOTTOM_BAR_STYLES = listOf(BottomBarStyle.BILIPAI, BottomBarStyle.MIO)
 private val BOTTOM_BAR_LABELS = listOf("BiliPai 原版", "Mio 简版")
 private val HAPTIC_LEVELS = listOf(HapticLevel.LIGHT, HapticLevel.MEDIUM, HapticLevel.HEAVY)
@@ -557,7 +557,7 @@ fun SettingsScreen(
                             // v3.6 全局玻璃透明度四档：只缩放玻璃填充 alpha，不改模糊/折射/可读层
                             SegmentSetting(
                                 title = "玻璃透明度",
-                                subtitle = "低 = OriginOS 高级材质参考（强模糊 + 透彩色）；中 / 高 / 极高逐级更透；" +
+                                subtitle = "低 = OriginOS 高级材质参考（强模糊 + 透彩色）；中 / 高 / 全透逐级更透，全透不带 tint；" +
                                     "只缩放玻璃填充浓度，可读层与模糊/折射不变；液态玻璃关闭时不生效",
                                 labels = GLASS_TRANSPARENCY_LABELS,
                                 selectedIndex = GLASS_TRANSPARENCY_LEVELS

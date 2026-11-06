@@ -60,10 +60,11 @@ fun applyGlassGeometryTransparency(
     geometry: MioGlassGeometry,
     level: GlassTransparency,
     enabled: Boolean = true,
+    floorAlpha: Float = 0.035f,
 ): MioGlassGeometry {
     if (!enabled) return geometry
     return geometry.copy(
-        fillAlpha = scaleGlassAlpha(geometry.fillAlpha, level, floor = 0.035f, ceiling = 0.90f),
+        fillAlpha = scaleGlassAlpha(geometry.fillAlpha, level, floor = floorAlpha, ceiling = 0.90f),
     )
 }
 
@@ -81,8 +82,16 @@ fun scaledGlassFillAlpha(
  * v3.8 PrismalAGSL 卡片玻璃的 tint 浓度：只做很淡的可读性 overlay，
  * 不把玻璃染成白雾；四档透明度继续按倍率缩放。
  */
-fun prismalCardTintAlpha(dark: Boolean, level: GlassTransparency): Float =
-    scaleGlassAlpha(if (dark) 0.12f else 0.08f, level, floor = 0.03f, ceiling = 0.20f)
+fun prismalCardTintAlpha(dark: Boolean, level: GlassTransparency): Float {
+    // 全透：不叠任何 tint/白底，只保留可选的弧面折射与极细边
+    if (level == GlassTransparency.ULTRA) return 0f
+    return scaleGlassAlpha(
+        if (dark) 0.07f else 0.04f,
+        level,
+        floor = 0.02f,
+        ceiling = 0.12f,
+    )
+}
 
 /** Prismal 卡片玻璃启用门槛：完整液态档 + 背景层背板可用 + 普通卡片（非引导覆盖层）。 */
 fun usesPrismalCardGlass(
@@ -96,15 +105,3 @@ fun usesPrismalCardGlass(
     capability.enabled &&
     capability.fullSurfaceBlur &&
     capability.mode == GlassRenderMode.LIQUID
-
-/** Haze/降级路径的装饰性边缘色散强度（0 = 不画）。 */
-fun resolveGlassEdgeDispersion(role: MioGlassRole, realtimeBlur: Boolean): Float {
-    if (!realtimeBlur) return 0f
-    return when (role) {
-        MioGlassRole.CARD -> 0.40f
-        MioGlassRole.DOCK -> 0.45f
-        MioGlassRole.CHROME -> 0.25f
-        MioGlassRole.INDICATOR -> 0.20f
-        MioGlassRole.SHEET -> 0f
-    }
-}
