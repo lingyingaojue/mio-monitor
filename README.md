@@ -8,7 +8,7 @@
 
 <br/>
 
-![Version](https://img.shields.io/badge/version-v3.7-007AFF)
+![Version](https://img.shields.io/badge/version-v3.8-007AFF)
 ![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.4-7F52FF?logo=kotlin&logoColor=white)
 ![Compose](https://img.shields.io/badge/Jetpack%20Compose-Miuix-4285F4?logo=jetpackcompose&logoColor=white)
@@ -25,7 +25,7 @@
 
 Mio 澪 是一款安卓硬件参数与性能监控应用。它把设备能够读到的硬件信息，尽可能完整、准确地呈现出来：CPU 每核频率与占用、GPU 负载与频率、电池电压电流功率与健康度、几十路热区温度与散热动作、内存与传感器。
 
-**v3.7 玻璃质感对齐 OriginOS「高级材质」**：全面下调玻璃填充浓度、卡片模糊提到 32dp，并给 Haze 卡片加饱和度增艳（透彩色），四档透明度以「低」为 OriginOS 参考档、中/高/极高逐级更透；顶栏、卡片、dock、弹层同步生效。**v3.6 全局玻璃透明度**：外观新增低 / 中 / 高 / 极高四档，统一缩放顶栏、返回条、卡片、底部 dock（BiliPai 与 Mio 简版两条路径）与弹层的玻璃填充浓度，默认「中」与 v3.5 外观一致。**v3.5 OriginOS 实验调校**：把 ADB 实测可用的 4 项系统设置做成开关（触控拉满 / 强开全局插帧 / 全局高刷锁定 / 全局视效增强），默认全关、首次进入需确认风险，支持一键恢复默认与恢复原始值；写入通道自动选择（ADB 授权 / Root / Shizuku），每次都回读校验；system 类 key 需 Shizuku / Root。**v3.4 底部导航栏直接使用 BiliPai 原版组件**（vendor BiliPai v0.7.8 的 `FloatingBottomBar` 及依赖闭包，Mio 只做 tab 状态映射）。**v3.3** 顶栏/返回条接入 Miuix Backdrop 光学链（背板录制 + 增艳 + 实时模糊 + 边缘折射/色散 + Bloom 高光 + 悬浮投影）；**v3.2** 下调玻璃填充不透明度；**v3.1** 接入 Haze 实时背景模糊。BiliPai 源码搬运清单见 [design-system/VENDORED.md](design-system/VENDORED.md)。
+**v3.8 卡片玻璃接入 [PrismalAGSL](https://github.com/styropyr0/PrismalAGSL)**：卡片改用库的 backdrop 液态玻璃（实时模糊 + 边缘 SDF 折射（24/48dp）+ 50% RGB 色散 + specular/depth），四档透明度只调 tint 浓度；顶栏/dock/选中胶囊同步开启色散；API<33/LITE 保留 Haze + 装饰彩边。**v3.7 玻璃质感对齐 OriginOS「高级材质」**：全面下调玻璃填充浓度、卡片模糊提到 32dp，并给 Haze 卡片加饱和度增艳（透彩色），四档透明度以「低」为 OriginOS 参考档、中/高/极高逐级更透；顶栏、卡片、dock、弹层同步生效。**v3.6 全局玻璃透明度**：外观新增低 / 中 / 高 / 极高四档，统一缩放顶栏、返回条、卡片、底部 dock（BiliPai 与 Mio 简版两条路径）与弹层的玻璃填充浓度，默认「中」与 v3.5 外观一致。**v3.5 OriginOS 实验调校**：把 ADB 实测可用的 4 项系统设置做成开关（触控拉满 / 强开全局插帧 / 全局高刷锁定 / 全局视效增强），默认全关、首次进入需确认风险，支持一键恢复默认与恢复原始值；写入通道自动选择（ADB 授权 / Root / Shizuku），每次都回读校验；system 类 key 需 Shizuku / Root。**v3.4 底部导航栏直接使用 BiliPai 原版组件**（vendor BiliPai v0.7.8 的 `FloatingBottomBar` 及依赖闭包，Mio 只做 tab 状态映射）。**v3.3** 顶栏/返回条接入 Miuix Backdrop 光学链（背板录制 + 增艳 + 实时模糊 + 边缘折射/色散 + Bloom 高光 + 悬浮投影）；**v3.2** 下调玻璃填充不透明度；**v3.1** 接入 Haze 实时背景模糊。BiliPai 源码搬运清单见 [design-system/VENDORED.md](design-system/VENDORED.md)。
 
 **v3.0 界面体系重做**：整套 UI 换成 BiliPai 的 Miuix 视觉语言——5 个主 tab 的悬浮玻璃底栏、滚动感知的玻璃顶栏、大圆角分组卡片、Miuix 设置页，并新增**浅色 / 深色 / 跟随系统**三种主题。
 

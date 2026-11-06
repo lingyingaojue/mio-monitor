@@ -14,6 +14,8 @@ window = "1.5.1"
 # Mio 3.0：改用 Maven Central 公开稳定版 0.9.4（BiliPai 的 SNAPSHOT 与其 Colors API 一致，
 # 但快照需 GitHub Packages 凭据；稳定版无需凭据且同样满足 design-system 的 API 需求）
 miuix = "0.9.4"
+# v3.8: PrismalAGSL 液态玻璃（Compose，MIT；JitPack tag）
+prismal = "v1.0.6"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -38,6 +40,7 @@ miuix-blur = { group = "top.yukonga.miuix.kmp", name = "miuix-blur-android", ver
 miuix-shader = { group = "top.yukonga.miuix.kmp", name = "miuix-shader-android", version.ref = "miuix" }
 miuix-squircle = { group = "top.yukonga.miuix.kmp", name = "miuix-squircle-android", version.ref = "miuix" }
 miuix-icons = { group = "top.yukonga.miuix.kmp", name = "miuix-icons-android", version.ref = "miuix" }
+prismal-glass = { group = "com.github.styropyr0", name = "PrismalAGSL", version.ref = "prismal" }
 # Navigation is bundled in :miuix-navigation to retain the video-return patches.
 
 [plugins]

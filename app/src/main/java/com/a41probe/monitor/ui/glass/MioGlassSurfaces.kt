@@ -26,6 +26,8 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.shadow.Shadow
@@ -34,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.a41probe.monitor.ui.components.GlassTransparencyConfig
 import com.a41probe.monitor.ui.theme.Ink
 import com.android.purebilibili.core.ui.blur.ChromeBackdropSource
+import com.styropyr0.prismal.PrismalGlassSurface
 import com.android.purebilibili.core.ui.effect.lens
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazePerformanceMode
@@ -91,6 +94,34 @@ fun MioGlassSurface(
     val liquidSource = LocalMioChromeBackdrop.current
     // 覆盖层卡片（引导页）：采样内容背板而不是背景层
     val isOverlayCard = role == MioGlassRole.CARD && sampling == MioGlassSampling.CHROME
+    // v3.8：卡片直接使用 PrismalAGSL（背景层背板 → blur + lens 折射 + 色散）。
+    // 只在 API33+ 完整档启用，其余情况继续走 Haze/降级。
+    val prismalPage = LocalMioPrismalPageBackdrop.current
+    if (usesPrismalCardGlass(role, isOverlayCard, capability, prismalPage != null)) {
+        val density = LocalDensity.current
+        val cardTint = lerp(Ink.glassFill, Ink.glassTint, 0.02f)
+        PrismalGlassSurface(
+            backdrop = prismalPage!!,
+            modifier = modifier,
+            shape = { shape },
+            onClick = onClick,
+            blurRadius = 8.dp,
+            tint = cardTint,
+            tintAlpha = prismalCardTintAlpha(dark, transparency),
+            // v3.8：真实 lens 需要明显的边缘弯折，specular/depth 用库默认保证玻璃厚度感
+            brightness = 0f,
+            contrast = 1f,
+            saturation = 1.55f,
+            refractionHeightPx = with(density) { 16.dp.toPx() },
+            refractionAmountPx = with(density) { 32.dp.toPx() },
+            chromaticAberration = 0.40f,
+        ) {
+            content()
+            // Prismal lens 的色散在纯色背景上可能不可见，叠一层极轻红蓝边保证观感
+            Box(Modifier.matchParentSize().mioGlassEdgeDispersion(shape, 0.18f))
+        }
+        return
+    }
     // 该角色是否处于"液态模式"（API33+ 完整档）：此时内容层没有挂 Haze 源，
     // 不能用 chromeState 做 Haze 降级（会采空源），退回纯 tint。
     val chromeLiquidMode = liquidSource != null && role != MioGlassRole.SHEET &&
@@ -248,6 +279,8 @@ fun MioGlassSurface(
     )
     // 边缘折射环（液态玻璃的"厚度/透镜感"）
     surface = surface.mioGlassLensEdge(shape, geometry.lensAlpha)
+    // v3.8：Haze 降级路径的边缘红蓝色散（Prismal/A（液态）由 lens 负责）
+    surface = surface.mioGlassEdgeDispersion(shape, resolveGlassEdgeDispersion(role, capability.realtimeBlur))
     // 镜面高光
     surface = surface.mioGlassSheen(geometry.sheenAlpha)
     if (onClick != null) {
@@ -439,6 +472,29 @@ private fun Shape.toOutlinePath(
             is Outline.Rounded -> addRoundRect(outline.roundRect)
             is Outline.Generic -> addPath(outline.path)
             is Outline.Rectangle -> addRect(outline.rect)
+        }
+    }
+}
+
+/**
+ * v3.8：装饰性边缘色散（Haze 降级 / Prismal 卡片边缘补偿）。
+ * 沿轮廓画红/蓝微偏移描边，近看有彩边、远看不脏；真实折射由 lens shader 负责。
+ */
+fun Modifier.mioGlassEdgeDispersion(shape: Shape, strength: Float): Modifier {
+    if (strength <= 0.001f) return this
+    return this.drawWithCache {
+        val path = shape.toOutlinePath(size, layoutDirection, this)
+        val stroke = Stroke(1.2.dp.toPx())
+        val offset = 0.9.dp.toPx()
+        val alpha = strength.coerceIn(0f, 0.6f)
+        onDrawWithContent {
+            drawContent()
+            translate(-offset, 0f) {
+                drawPath(path, Color(0xFFFF3B30).copy(alpha = alpha * 0.6f), style = stroke)
+            }
+            translate(offset, 0f) {
+                drawPath(path, Color(0xFF0A84FF).copy(alpha = alpha * 0.6f), style = stroke)
+            }
         }
     }
 }

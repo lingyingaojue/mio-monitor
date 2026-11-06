@@ -16,8 +16,8 @@ android {
         applicationId = "com.a41probe.monitor"
         minSdk = 26
         targetSdk = 37
-        versionCode = 370
-        versionName = "3.7.0"
+        versionCode = 380
+        versionName = "3.8.0"
     }
 
     buildTypes {
@@ -80,6 +80,8 @@ dependencies {
     implementation(libs.miuix.shader)
     implementation(libs.miuix.squircle)
     implementation(libs.miuix.icons)
+    // v3.8: PrismalAGSL 卡片液态玻璃（backdrop 采样 + lens 折射 + 色散）
+    implementation(libs.prismal.glass)
 
     // Shizuku（提权通道，行为不变）
     implementation("dev.rikka.shizuku:api:12.2.0")

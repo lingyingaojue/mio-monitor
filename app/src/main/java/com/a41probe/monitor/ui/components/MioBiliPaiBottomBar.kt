@@ -101,4 +101,7 @@ internal fun scaleBottomBarTuning(
         GlassTransparency.HIGH -> 0.015f
         GlassTransparency.ULTRA -> 0.01f
     },
+    // v3.8：BiliPai dock 壳体/指示器开色散（vendored 默认壳 0、指示器 0.5）
+    shellChromaticAberrationAmount = 0.35f,
+    indicatorChromaticAberrationAmount = 0.50f,
 )

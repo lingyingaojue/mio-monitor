@@ -17,6 +17,9 @@ import androidx.compose.ui.Modifier
 import com.a41probe.monitor.ui.components.GlassLevel
 import com.android.purebilibili.core.ui.blur.ChromeBackdropSource
 import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
+import com.styropyr0.prismal.sources.PrismalGlassLayer
+import com.styropyr0.prismal.sources.prismalGlassLayer
+import com.styropyr0.prismal.sources.rememberPrismalGlassLayer
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 
@@ -57,6 +60,9 @@ val LocalMioGlassCapability = staticCompositionLocalOf {
  */
 val LocalMioChromeBackdrop = staticCompositionLocalOf<ChromeBackdropSource?> { null }
 
+/** v3.8：PrismalAGSL 背景层采样源（卡片折射+色散）；null = 走 Haze 降级。 */
+val LocalMioPrismalPageBackdrop = staticCompositionLocalOf<PrismalGlassLayer?> { null }
+
 /** 滚动进度回写口：ScrollAware 检测到后把页面滚动进度写进来，顶栏读它做渐强。 */
 val LocalScrollFractionSink = staticCompositionLocalOf<MutableState<Float>?> { null }
 
@@ -75,6 +81,12 @@ fun MioGlassHost(content: @Composable () -> Unit) {
     val host = remember { MioGlassHostState(chromeState, pageState, scrollFraction) }
     val capability = LocalMioGlassCapability.current
     // API 33+ 且完整档：内容层额外录制一份 Miuix Backdrop（顶栏/dock/返回条共享同一背板）
+    // v3.8：背景层录制 Prismal 背板，供卡片采样
+    val prismalPageLayer = if (liquidChromeAvailable(capability)) {
+        rememberPrismalGlassLayer()
+    } else {
+        null
+    }
     val liquidSource = if (liquidChromeAvailable(capability)) {
         rememberChromeBackdropSource(
             drawContentToScreen = true,
@@ -87,6 +99,7 @@ fun MioGlassHost(content: @Composable () -> Unit) {
         LocalMioGlass provides host,
         LocalScrollFractionSink provides scrollFraction,
         LocalMioChromeBackdrop provides liquidSource,
+        LocalMioPrismalPageBackdrop provides prismalPageLayer,
     ) {
         content()
     }
@@ -99,7 +112,11 @@ fun MioBackdropLayer(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val host = LocalMioGlass.current
-    val m = if (host != null) modifier.hazeSource(host.pageState) else modifier
+    val prismalPage = LocalMioPrismalPageBackdrop.current
+    var m = modifier
+    // Prismal 背板只录背景层（环境光 + 立绘），不含卡片，无自引用
+    if (prismalPage != null) m = m.prismalGlassLayer(prismalPage)
+    if (host != null) m = m.hazeSource(host.pageState)
     Box(m, content = content)
 }
 

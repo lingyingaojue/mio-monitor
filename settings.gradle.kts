@@ -17,6 +17,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // v3.8: PrismalAGSL 液态玻璃（MIT；GitHub Releases 经 JitPack 分发）
+        maven(url = "https://jitpack.io")
     }
 }
 

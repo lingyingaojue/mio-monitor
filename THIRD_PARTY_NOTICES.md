@@ -15,6 +15,7 @@ Mio 3.0 使用了以下第三方开源组件。完整许可文本可通过列出
 |---|---|---|
 | Miuix（miuix-ui / preference / blur / shader / squircle / icons） | `top.yukonga.miuix.kmp:*:0.9.4` | Apache-2.0 |
 | Haze（core / blur / blur-materials） | `dev.chrisbanes.haze:*:2.0.1` | Apache-2.0 |
+| PrismalAGSL（卡片液态玻璃） | `com.github.styropyr0:PrismalAGSL:v1.0.6`（JitPack） | MIT（以仓库 LICENSE 为准；上游发布 POM 元数据误标 Apache-2.0） |
 | Jetpack Compose（UI / Foundation / Material3 / Animation） | `androidx.compose.*`（Compose BOM beta 2026.09.00；material3 1.5.0-alpha29） | Apache-2.0 |
 | AndroidX Activity / Lifecycle / Core / Annotation | `androidx.*` | Apache-2.0 |
 | NavigationEvent | `androidx.navigationevent:navigationevent-compose:1.1.2` | Apache-2.0 |
