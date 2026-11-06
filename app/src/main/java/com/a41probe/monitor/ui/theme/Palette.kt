@@ -1,6 +1,8 @@
 package com.a41probe.monitor.ui.theme
 
 import android.content.Context
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
 
@@ -193,28 +195,80 @@ object Palettes {
         ?: Specials.paletteOf(id) ?: AZURE
 }
 
+/** 明暗模式（v3.0 新增，BiliPai 同款三档） */
+enum class ThemeMode(val id: String, val label: String) {
+    SYSTEM("system", "跟随系统"),
+    LIGHT("light", "浅色"),
+    DARK("dark", "深色");
+
+    companion object {
+        fun of(id: String?): ThemeMode = entries.firstOrNull { it.id == id } ?: SYSTEM
+    }
+}
+
 object ThemeConfig {
     private const val PREFS = "mio_theme"
     private const val KEY_ID = "palette_id"
+    private const val KEY_MODE = "theme_mode"
+    private const val KEY_ARTWORK = "show_artwork"
 
-    @Volatile private var currentId: String = "azure"
+    // Compose 状态：切换后 MioTheme / 设置页立即重组
+    private val paletteState = mutableStateOf(Palettes.AZURE)
+    private val modeState = mutableStateOf(ThemeMode.SYSTEM)
+    private val artworkState = mutableStateOf(true)
 
     fun init(ctx: Context) {
-        val id = runCatching {
-            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_ID, "azure")
-        }.getOrNull()
-        currentId = Palettes.of(id).id
-        Ink.applyPalette(Palettes.of(id))
+        val sp = runCatching {
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        }.getOrNull() ?: return
+        val id = runCatching { sp.getString(KEY_ID, "azure") }.getOrNull()
+        paletteState.value = Palettes.of(id)
+        modeState.value = ThemeMode.of(runCatching { sp.getString(KEY_MODE, "system") }.getOrNull())
+        artworkState.value = runCatching { sp.getBoolean(KEY_ARTWORK, true) }.getOrDefault(true)
     }
 
+    /** 兼容旧调用：设置配色预设。 */
     fun set(ctx: Context, p: Palette) {
-        currentId = p.id
-        Ink.applyPalette(p)
+        paletteState.value = p
         runCatching {
             ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .edit().putString(KEY_ID, p.id).apply()
         }
     }
 
-    fun current(): Palette = Palettes.of(currentId)
+    fun setMode(ctx: Context, mode: ThemeMode) {
+        modeState.value = mode
+        runCatching {
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putString(KEY_MODE, mode.id).apply()
+        }
+    }
+
+    fun setArtwork(ctx: Context, show: Boolean) {
+        artworkState.value = show
+        runCatching {
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_ARTWORK, show).apply()
+        }
+    }
+
+    /** 兼容旧调用：当前配色预设。 */
+    fun current(): Palette = paletteState.value
+
+    fun palette(): Palette = paletteState.value
+
+    fun mode(): ThemeMode = modeState.value
+
+    fun showArtwork(): Boolean = artworkState.value
+
+    /** 当前应使用的明暗模式（SYSTEM 时读系统设置）。 */
+    @Composable
+    fun isDark(): Boolean = when (modeState.value) {
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+    }
+
+    /** 供非组合上下文（如 Splash 启动态）兜底取当前模式。 */
+    fun modeSnapshot(): ThemeMode = modeState.value
 }

@@ -2,69 +2,198 @@ package com.a41probe.monitor.ui.theme
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 
-/* ===== 设计令牌（iOS 视觉语言）=====
- * v1.1：令牌**名字与类型完全不变**，内部改为读取可切换的 Palette（Compose 状态）。
- * 因此全工程几百处 `Ink.xxx` 调用点一个字都不用改，切换主题自动重组、即时生效。
- * 语义色（温度红/橙/绿、警告/危险）固定不随主题变化——见 Palette.kt 说明。 */
-private val paletteState = mutableStateOf(Palettes.BLUE)
+/* ============================================================
+ * Mio 3.0 设计令牌（BiliPai / Miuix 视觉语言）
+ *
+ * 与 v1.x 的兼容策略：
+ *  - 字段名与类型完全不变（bg/card/panel/stroke/tx/tx2/tx3/off/accent/...）；
+ *  - 内部改为读取「已解析颜色快照」的 Compose 状态，MioTheme 组合时 bind()；
+ *  - 因此全工程数百处 `Ink.xxx` 调用点一个字都不用改，明暗/配色切换自动重组。
+ *  - 语义色（温度红/橙/绿、警告/危险）随明暗模式各取一版，不再写死。
+ * ============================================================ */
 
-object Ink {
-    val bg: Color get() = paletteState.value.bg
-    val card: Color get() = paletteState.value.card
-    val panel: Color get() = paletteState.value.panel
-    val stroke: Color get() = paletteState.value.stroke
+/** 主题解析后的一整份颜色快照。字段与旧 Ink 一一对应，另补充 Miuix 角色。 */
+data class MioColors(
+    val bg: Color,
+    val card: Color,
+    val panel: Color,
+    val stroke: Color,
+    val tx: Color,
+    val tx2: Color,
+    val tx3: Color,
+    val off: Color,
+    val accent: Color,
+    val accent2: Color,
+    val onAccent: Color,
+    val accentSoft: Color,
+    val curve: Color,
+    val shadowTint: Color,
+    val clusterPrime: Color,
+    val clusterPerf: Color,
+    val clusterEff: Color,
+    val clusterBal: Color,
+    val iconBgBlue: Color,
+    val iconBgCyan: Color,
+    val iconBgGreen: Color,
+    val iconBgOrange: Color,
+    val iconBgPurple: Color,
+    val iconBgYellow: Color,
+    val ok: Color,
+    val warn: Color,
+    val danger: Color,
+    /** 卡片内嵌深一档的表面（旧 NestedTile 的 Ink.panel 语义） */
+    val surfaceSunken: Color,
+    /** 分割线（Miuix dividerLine） */
+    val divider: Color,
+    /** 强调色浅底上可读的文字色 */
+    val onAccentSoft: Color,
+) {
+    companion object {
+        private fun Color.lighten(amount: Float): Color = lerp(this, Color.White, amount)
 
-    val tx: Color get() = paletteState.value.tx        // 主文字
-    val tx2: Color get() = paletteState.value.tx2      // 次级文字
-    val tx3: Color get() = paletteState.value.tx3      // 口径说明小字
-    val off: Color get() = paletteState.value.off      // 置灰/不可用
+        private fun Color.mixDark(amount: Float): Color = lerp(this, Color(0xFF1A1A1A), amount)
 
-    val accent: Color get() = paletteState.value.accent
-    val accent2: Color get() = paletteState.value.accent2
-    /** 压在强调色上的文字/图标色（浅色主题用深色文字，默认蓝用白色） */
-    val onAccent: Color get() = paletteState.value.onAccent
-    /** 强调色浅底：选中态 / Tab 指示器 */
-    val accentSoft: Color get() = paletteState.value.accentSoft
-    /** 曲线主色：比 accent 柔和一档 */
-    val curve: Color get() = paletteState.value.curve
-    /** 阴影色：带主题色温 */
-    val shadowTint: Color get() = paletteState.value.shadowTint
-    val m: Color get() = paletteState.value.accent2
-
-    // 语义色：固定
-    val ok = Color(0xFF34C759)
-    val warn = Color(0xFFFF9500)
-    val danger = Color(0xFFFF3B30)
-
-    val clusterPrime: Color get() = paletteState.value.clusterPrime
-    val clusterPerf: Color get() = paletteState.value.clusterPerf
-    val clusterEff: Color get() = paletteState.value.clusterEff
-    val clusterBal: Color get() = paletteState.value.clusterBal
-
-    val iconBgBlue: Color get() = paletteState.value.iconBgBlue
-    val iconBgCyan: Color get() = paletteState.value.iconBgCyan
-    val iconBgGreen: Color get() = paletteState.value.iconBgGreen
-    val iconBgOrange: Color get() = paletteState.value.iconBgOrange
-    val iconBgPurple: Color get() = paletteState.value.iconBgPurple
-    val iconBgYellow: Color get() = paletteState.value.iconBgYellow
-
-    internal fun applyPalette(p: Palette) { paletteState.value = p }
+        /** 由 Mio 配色预设 + 明暗模式派生全套颜色。深色表面固定中性色，只让强调色带色温。 */
+        fun from(palette: Palette, dark: Boolean): MioColors {
+            if (!dark) {
+                return MioColors(
+                    bg = palette.bg,
+                    card = palette.card,
+                    panel = palette.panel,
+                    stroke = palette.stroke,
+                    tx = palette.tx,
+                    tx2 = palette.tx2,
+                    tx3 = palette.tx3,
+                    off = palette.off,
+                    accent = palette.accent,
+                    accent2 = palette.accent2,
+                    onAccent = palette.onAccent,
+                    accentSoft = palette.accentSoft,
+                    curve = palette.curve,
+                    shadowTint = palette.shadowTint,
+                    clusterPrime = palette.clusterPrime,
+                    clusterPerf = palette.clusterPerf,
+                    clusterEff = palette.clusterEff,
+                    clusterBal = palette.clusterBal,
+                    iconBgBlue = palette.iconBgBlue,
+                    iconBgCyan = palette.iconBgCyan,
+                    iconBgGreen = palette.iconBgGreen,
+                    iconBgOrange = palette.iconBgOrange,
+                    iconBgPurple = palette.iconBgPurple,
+                    iconBgYellow = palette.iconBgYellow,
+                    ok = Color(0xFF34C759),
+                    warn = Color(0xFFFF9500),
+                    danger = Color(0xFFFF3B30),
+                    surfaceSunken = palette.panel,
+                    divider = palette.stroke,
+                    onAccentSoft = palette.accent,
+                )
+            }
+            val darkAccent = palette.accent.lighten(0.34f)
+            return MioColors(
+                bg = Color(0xFF0D0D0D),
+                card = Color(0xFF1A1A1A),
+                panel = Color(0xFF262626),
+                stroke = Color(0xFF2E2E2E),
+                tx = Color(0xFFE8E8E8),
+                tx2 = Color(0xFFB0B0B0),
+                tx3 = Color(0xFF9A9A9A),
+                off = Color(0xFF707070),
+                accent = darkAccent,
+                accent2 = palette.accent2.lighten(0.1f),
+                onAccent = if (darkAccent.luminance() > 0.55f) Color(0xFF101010) else Color.White,
+                accentSoft = palette.accent.copy(alpha = 0.22f),
+                curve = darkAccent,
+                shadowTint = Color.Black,
+                clusterPrime = palette.clusterPrime.lighten(0.22f),
+                clusterPerf = palette.clusterPerf.lighten(0.22f),
+                clusterEff = palette.clusterEff.lighten(0.22f),
+                clusterBal = palette.clusterBal.lighten(0.22f),
+                iconBgBlue = palette.iconBgBlue.mixDark(0.74f),
+                iconBgCyan = palette.iconBgCyan.mixDark(0.74f),
+                iconBgGreen = palette.iconBgGreen.mixDark(0.74f),
+                iconBgOrange = palette.iconBgOrange.mixDark(0.74f),
+                iconBgPurple = palette.iconBgPurple.mixDark(0.74f),
+                iconBgYellow = palette.iconBgYellow.mixDark(0.74f),
+                ok = Color(0xFF30D158),
+                warn = Color(0xFFFF9F0A),
+                danger = Color(0xFFFF453A),
+                surfaceSunken = Color(0xFF111111),
+                divider = Color(0xFF2A2A2A),
+                onAccentSoft = darkAccent,
+            )
+        }
+    }
 }
 
-// 提权档位标注：颜色改为计算属性，随主题即时变化（原先写死在枚举构造参数里，换肤不生效）
+object Ink {
+    private val state = mutableStateOf(MioColors.from(Palettes.AZURE, dark = false))
+
+    /** 由 MioTheme 在组合时写入；切换主题/明暗后所有读取点自动重组。 */
+    internal fun bind(colors: MioColors) {
+        state.value = colors
+    }
+
+    val bg: Color get() = state.value.bg
+    val card: Color get() = state.value.card
+    val panel: Color get() = state.value.panel
+    val stroke: Color get() = state.value.stroke
+
+    val tx: Color get() = state.value.tx
+    val tx2: Color get() = state.value.tx2
+    val tx3: Color get() = state.value.tx3
+    val off: Color get() = state.value.off
+
+    val accent: Color get() = state.value.accent
+    val accent2: Color get() = state.value.accent2
+    val onAccent: Color get() = state.value.onAccent
+    val accentSoft: Color get() = state.value.accentSoft
+    val curve: Color get() = state.value.curve
+    val shadowTint: Color get() = state.value.shadowTint
+    val m: Color get() = state.value.accent2
+
+    val ok: Color get() = state.value.ok
+    val warn: Color get() = state.value.warn
+    val danger: Color get() = state.value.danger
+
+    val clusterPrime: Color get() = state.value.clusterPrime
+    val clusterPerf: Color get() = state.value.clusterPerf
+    val clusterEff: Color get() = state.value.clusterEff
+    val clusterBal: Color get() = state.value.clusterBal
+
+    val iconBgBlue: Color get() = state.value.iconBgBlue
+    val iconBgCyan: Color get() = state.value.iconBgCyan
+    val iconBgGreen: Color get() = state.value.iconBgGreen
+    val iconBgOrange: Color get() = state.value.iconBgOrange
+    val iconBgPurple: Color get() = state.value.iconBgPurple
+    val iconBgYellow: Color get() = state.value.iconBgYellow
+
+    // Miuix 语义补充（新组件使用）
+    val surface: Color get() = state.value.card
+    val surfaceSunken: Color get() = state.value.surfaceSunken
+    val divider: Color get() = state.value.divider
+    val onAccentSoft: Color get() = state.value.onAccentSoft
+}
+
+// 提权档位标注：颜色改为计算属性，随主题即时变化
 enum class Priv(val tag: String) {
     FREE("—"),
     SHIZUKU("S"),
     ROOT("R");
 
-    val color: Color get() = when (this) {
-        FREE -> Ink.off
-        SHIZUKU -> Ink.accent
-        ROOT -> Ink.warn
-    }
+    val color: Color
+        get() = when (this) {
+            FREE -> Ink.off
+            SHIZUKU -> Ink.accent
+            ROOT -> Ink.warn
+        }
 
-    companion object { fun of(tag: String) = entries.firstOrNull { it.tag == tag } ?: FREE }
+    companion object {
+        fun of(tag: String) = entries.firstOrNull { it.tag == tag } ?: FREE
+    }
 }
 
 // 数据状态机

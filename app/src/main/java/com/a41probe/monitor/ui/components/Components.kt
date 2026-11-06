@@ -1,23 +1,16 @@
 package com.a41probe.monitor.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import android.content.ContentResolver
+import android.database.ContentObserver
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -26,8 +19,29 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowBackIosNew
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -38,28 +52,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
-import android.content.ContentResolver
-import android.database.ContentObserver
-import android.os.Build
-import androidx.compose.ui.graphics.BlurEffect
-import android.os.Handler
-import android.os.Looper
-import android.provider.Settings
-import androidx.compose.foundation.border
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -69,21 +73,30 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.a41probe.monitor.ui.theme.Ink
 import com.a41probe.monitor.ui.theme.Priv
+import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppCard
+import com.android.purebilibili.core.ui.components.AppCardShape
+import com.android.purebilibili.core.ui.components.AppPreference
+import com.android.purebilibili.core.ui.components.AppPrimaryButton
+import com.android.purebilibili.core.ui.components.AppSwitchPreference
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppTextButton
 
 private val CardShape = RoundedCornerShape(18.dp)
-private val TileShape = RoundedCornerShape(10.dp)
+private val TileShape = RoundedCornerShape(12.dp)
+
+/* ============================================================
+ * 组件层（v3.0）：保留 v2 的全部公开 API（屏幕代码无需改签名），
+ * 内部视觉换成 BiliPai / Miuix 风格 —— 卡片走 design-system AppCard，
+ * 设置/开关走 AppPreference / AppSwitchPreference，按钮走 AppButton。
+ * ============================================================ */
 
 /**
- * 卡片容器：iOS 雾玻璃——半透明白 + 顶部微高光 + 柔化光泽层 + 细边 + 柔和冷阴影。
- *
- * v0.28.8 结构（三层，文字/图表永远在最上层、零模糊）：
- *   1) 玻璃底色层：按档位取半透明白（完整 0.62 / 简约 0.80 / 关闭实色）；
- *   2) 光泽层：顶部微弱高光 + 滚动时缓慢流动的斜向光带；仅"完整"档且 API31+ 施加 RenderEffect
- *      轻模糊（Android 12 以下自动降级为不模糊的静态渐变，视觉近似、零风险）；
- *   3) 内容层：文字与图表，不参与任何模糊。
- *
- * 交互反馈：onClick 非空时，按下 → 轻微收缩(0.985) + 阴影下沉(10dp→5dp) + 底色明暗下沉，
- * 抬起按 Motion.easing 平滑恢复；并附一次极轻震动。
+ * 卡片容器（BiliPai 风格）：16dp 大圆角、卡片表面色、Miuix 按压反馈。
+ * 保留旧签名：ProbeCard(modifier, onClick, content)。
  */
 @Composable
 fun ProbeCard(
@@ -91,101 +104,12 @@ fun ProbeCard(
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    val level = GlassConfig.effective()
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val animScale = rememberAnimatorScale()
-    val canAnim = animScale > 0f
-    val haptics = rememberHaptics()
-
-    /* v0.28.11 按压反馈回归需求原文：**轻微收缩 + 阴影变化 + 透明度变化**，抬起平滑恢复。
-     * 去掉了 0.28.9 加的"两段式 + 强调色辉光"——用户反馈"太复杂、不符合要求"。 */
-    val tapped = pressed && canAnim
-    LaunchedEffect(pressed, canAnim) { if (tapped) haptics.press() }
-
-    val ms = if (pressed) Motion.pressMs else Motion.releaseMs
-    val baseElev = if (level == GlassLevel.OFF) 6.dp else 10.dp
-    val elev by animateDpAsState(
-        if (tapped) baseElev - 5.dp else baseElev,
-        tween(durationMillis = if (canAnim) ms else 0, easing = Motion.easing), label = "cardElev")
-    val scale by animateFloatAsState(
-        if (tapped) 0.975f else 1f,
-        tween(durationMillis = if (canAnim) ms else 0, easing = Motion.easing), label = "cardScale")
-    val dim by animateFloatAsState(
-        if (tapped) 0.90f else 1f,
-        tween(durationMillis = if (canAnim) ms else 0, easing = Motion.easing), label = "cardDim")
-
-    val fill = when (level) {
-        GlassLevel.FULL -> Color.White.copy(alpha = 0.62f * dim)
-        GlassLevel.LITE -> Color.White.copy(alpha = 0.80f * dim)
-        GlassLevel.OFF -> Ink.card.copy(alpha = dim)
-    }
-    val edge = when (level) {
-        GlassLevel.OFF -> Ink.stroke
-        GlassLevel.LITE -> Color.White.copy(alpha = 0.55f)
-        GlassLevel.FULL -> Color.White.copy(alpha = 0.65f)
-    }
-    // 顶部微弱高光（模拟玻璃光泽）：上亮下透明的窄渐变
-    val sheen = remember {
-        Brush.verticalGradient(
-            0f to Color.White.copy(alpha = 0.55f),
-            0.14f to Color.White.copy(alpha = 0.12f),
-            1f to Color.Transparent,
-        )
-    }
-    val scrolling = LocalScrolling.current
-    val sheenBlur = if (level == GlassLevel.FULL && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-        Modifier.blur(2.dp) else Modifier
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .shadow(
-                elevation = elev, shape = CardShape, clip = false,
-                ambientColor = Color(0x14000000), spotColor = Color(0x12000000),
-            )
-            .clip(CardShape)
-            // 所有卡片都可按下（无 onClick 的卡片也给触感与视觉反馈，不做任何动作）
-            .clickable(
-                interactionSource = interaction, indication = null) {
-                onClick?.invoke()
-            }
+    AppCard(
+        modifier = modifier.fillMaxWidth(),
+        shape = AppCardShape.Semantic(ContainerLevel.Card),
+        onClick = onClick,
     ) {
-        // 1) 玻璃底色
-        Box(Modifier.matchParentSize().background(fill))
-        // 2) 光泽层（可模糊；文字图表在它之上，绝不被扭曲）
-        Box(Modifier.matchParentSize().then(sheenBlur).background(sheen))
-        // 2b) 细边：画在光泽之上、内容之下
-        Box(Modifier.matchParentSize().border(1.dp, edge, CardShape))
-        // 2b) 滚动时缓慢流动的高光带——状态在绘制期读取，不触发重组
-        if (scrolling && level != GlassLevel.OFF && animScale > 0f) {
-            val trans = rememberInfiniteTransition(label = "cardSheen")
-            val pos by trans.animateFloat(
-                0f, 1f,
-                infiniteRepeatable(tween(Motion.sheenMs, easing = LinearEasing), RepeatMode.Restart),
-                label = "cardSheenPos")
-            Box(
-                Modifier.matchParentSize().drawWithCache {
-                    val w = size.width
-                    val h = size.height
-                    val cy = -h * 0.5f + pos * (h * 1.8f)
-                    val brush = Brush.linearGradient(
-                        0f to Color.Transparent,
-                        0.5f to Color.White.copy(alpha = 0.10f),
-                        1f to Color.Transparent,
-                        start = Offset(0f, cy - h * 0.35f),
-                        end = Offset(w, cy + h * 0.35f),
-                    )
-                    onDrawBehind { drawRect(brush) }
-                }
-            )
-        }
-        // 3) 内容层：文字 / 图表，零模糊
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            content = { content() }
-        )
+        Box(Modifier.fillMaxWidth().padding(16.dp)) { content() }
     }
 }
 
@@ -206,10 +130,6 @@ class SafeCardScope internal constructor(
 
 /**
  * 卡片级错误边界：包装 ProbeCard，维护错误状态。
- * - composition 期间未捕获异常由 CrashCatcher 全局兜底落盘；
- * - content 内危险计算用 scope.safe{} 包裹后，单卡异常降级为统一占位，不影响同页其他卡片；
- * - 错误状态 rememberSaveable 持久化（旋转/深色模式重建不丢）；
- * - 数据变化时自动重试（error 状态在下次成功采集后由调用方清除，或用户切 tab 重建）。
  */
 @Composable
 fun SafeCard(
@@ -223,11 +143,12 @@ fun SafeCard(
     if (error != null) {
         ProbeCard(modifier) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(Ink.warn))
+                Box(Modifier.size(8.dp).clip(CircleShape).background(Ink.warn))
                 Spacer(Modifier.width(8.dp))
                 Column {
-                    Text("$fallbackTitle 读取异常", color = Ink.tx, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    Text(error ?: "该模块数据暂时不可用", color = Ink.tx3, fontSize = 11.sp, maxLines = 2)
+                    Text("$fallbackTitle 读取异常", color = Ink.tx, fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold)
+                    Text(error ?: "该模块数据暂时不可用", color = Ink.tx3, fontSize = 12.sp, maxLines = 2)
                 }
             }
         }
@@ -236,7 +157,7 @@ fun SafeCard(
     ProbeCard(modifier, onClick = onClick) { scope.content() }
 }
 
-/** 卡片内灰底嵌套块：细分指标分组（对应 iOS 分组列表内嵌灰块） */
+/** 卡片内嵌块（表面深一档、12dp 圆角）：细分指标分组 */
 @Composable
 fun NestedTile(
     modifier: Modifier = Modifier,
@@ -246,13 +167,13 @@ fun NestedTile(
         modifier = modifier
             .fillMaxWidth()
             .clip(TileShape)
-            .background(Ink.panel)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        content = { content() }
+            .background(Ink.surfaceSunken)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        content = { content() },
     )
 }
 
-/** 卡片标题行：组标题（16sp 半粗黑）+ 提权小标 + 右侧标注 */
+/** 卡片标题行：组标题 + 提权小标 + 右侧标注 */
 @Composable
 fun CardTitle(
     label: String,
@@ -261,13 +182,17 @@ fun CardTitle(
     right: @Composable (() -> Unit)? = null,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = Ink.tx, fontSize = 16.sp,
+        AppText(
+            text = label,
+            color = Ink.tx,
+            fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
-            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-        // v20.16(P0-3): FREE 卡不画徽标——"—"对用户无信息，只会制造噪音（首屏徽标 7→3）
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
         if (priv != null && priv != Priv.FREE) {
             Spacer(Modifier.width(6.dp))
-            // v20.12(S1-3): Root 通道填充数据时，S 徽标按 R 显示（与顶栏橙 Root 语义一致）
             PrivBadge(if (priv == Priv.SHIZUKU && rootActive) Priv.ROOT else priv)
         }
         if (right != null) {
@@ -277,14 +202,14 @@ fun CardTitle(
     }
 }
 
-/** 提权小标：浅底圆角，无边框（L4: 11sp 保证低密度屏可读） */
+/** 提权小标：浅底圆角 chip */
 @Composable
 fun PrivBadge(priv: Priv, text: String? = null) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(7.dp))
-            .background(priv.color.copy(alpha = 0.12f))
-            .padding(horizontal = 6.dp, vertical = 3.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(priv.color.copy(alpha = 0.14f))
+            .padding(horizontal = 6.dp, vertical = 3.dp),
     ) {
         Text(
             text ?: priv.tag,
@@ -296,29 +221,29 @@ fun PrivBadge(priv: Priv, text: String? = null) {
     }
 }
 
-/** 状态徽章：小圆点 + 文字；onBlue=true 用于强调色顶栏。
- *  文字走 Ink.onAccent（浅色主色自动转深字）；底色片按 onAccent 明暗取不同透明度，
- *  保证深字/白字两种情形都比裸底色更清楚。alpha 供停更闪烁 */
+/** 状态徽章：小圆点 + 文字（BiliPai 胶囊 chip） */
 @Composable
 fun DotBadge(dotColor: Color, text: String, onBlue: Boolean = false, alpha: Float = 1f) {
     val pill = if (onBlue) {
-        Color.White.copy(alpha = if (Ink.onAccent.luminance() > 0.5f) 0.18f else 0.32f)
-    } else Ink.panel
+        Color.White.copy(alpha = if (Ink.onAccent.luminance() > 0.5f) 0.2f else 0.34f)
+    } else {
+        Ink.panel
+    }
     Row(
         modifier = Modifier
             .graphicsLayer { this.alpha = alpha }
-            .clip(RoundedCornerShape(7.dp))
+            .clip(RoundedCornerShape(9.dp))
             .background(pill)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(5.dp).clip(RoundedCornerShape(2.5.dp)).background(dotColor))
+        Box(Modifier.size(5.dp).clip(CircleShape).background(dotColor))
         Spacer(Modifier.width(5.dp))
         Text(text, color = if (onBlue) Ink.onAccent else Ink.tx2, fontSize = 10.5.sp)
     }
 }
 
-/** 数值展示：大数字（蓝或主色）+ 单位 + 副说明 */
+/** 数值展示：大数字（主色）+ 单位 + 副说明 */
 @Composable
 fun StatValue(
     value: String,
@@ -329,8 +254,10 @@ fun StatValue(
 ) {
     Column {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(value, color = color, fontSize = sizeSp.sp,
-                fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
+            Text(
+                value, color = color, fontSize = sizeSp.sp,
+                fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace,
+            )
             if (unit.isNotEmpty()) {
                 Spacer(Modifier.width(3.dp))
                 Text(unit, color = Ink.tx2, fontSize = 12.sp)
@@ -338,13 +265,12 @@ fun StatValue(
         }
         if (sub != null) {
             Spacer(Modifier.height(3.dp))
-            // UX(L1): 口径说明是信任关键，12sp + 更深灰保证对比度
             Text(sub, color = Ink.tx3, fontSize = 12.sp)
         }
     }
 }
 
-/** iOS 设置式行：左黑标签 / 右数值（灰单位） / 状态点（未传状态不画点，L8） */
+/** 信息行：左标签 / 右数值（灰单位） / 状态点 */
 @Composable
 fun StatRow(
     name: String,
@@ -354,19 +280,24 @@ fun StatRow(
     mono: Boolean = false,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),   // L3: 行高透气
+        modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (stateColor != null) {
-            Box(Modifier.size(5.dp).clip(RoundedCornerShape(2.5.dp)).background(stateColor))
+            Box(Modifier.size(5.dp).clip(CircleShape).background(stateColor))
             Spacer(Modifier.width(8.dp))
         }
-        Text(name, color = Ink.tx, fontSize = 13.sp,
-            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Text(value, color = if (mono) Ink.accent else Ink.tx2,
-            fontSize = if (mono) 14.sp else 13.sp,
+        Text(
+            name, color = Ink.tx, fontSize = 14.sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        )
+        Text(
+            value,
+            color = if (mono) Ink.accent else Ink.tx2,
+            fontSize = if (mono) 14.sp else 14.sp,
             fontFamily = if (mono) FontFamily.Monospace else null,
-            fontWeight = if (mono) FontWeight.Medium else FontWeight.Normal)
+            fontWeight = if (mono) FontWeight.Medium else FontWeight.Normal,
+        )
         if (unit.isNotEmpty()) {
             Spacer(Modifier.width(3.dp))
             Text(unit, color = Ink.off, fontSize = 11.sp)
@@ -374,40 +305,44 @@ fun StatRow(
     }
 }
 
-/** 横条行（温度/占比）：名称 + 归一化条 + 值（灰底轨道） */
+/** 横条行（温度/占比）：名称 + 归一化条 + 值 */
 @Composable
 fun BarRow(
     name: String,
-    frac: Float,          // 0..1 归一化位置
+    frac: Float,
     value: String,
     barColor: Color,
     nameWidth: Dp = 96.dp,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),   // L3: 行高透气
+        modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(name, color = Ink.tx, fontSize = 12.sp,
-            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(nameWidth))
+        Text(
+            name, color = Ink.tx, fontSize = 12.5.sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(nameWidth),
+        )
         Spacer(Modifier.width(8.dp))
         Box(
             modifier = Modifier
                 .weight(1f)
                 .height(9.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(Ink.panel)
+                .clip(RoundedCornerShape(5.dp))
+                .background(Ink.panel),
         ) {
             Box(
                 Modifier
                     .fillMaxWidth(frac.coerceIn(0f, 1f))
                     .height(9.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(barColor)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(barColor),
             )
         }
         Spacer(Modifier.width(8.dp))
-        Text(value, color = Ink.tx, fontSize = 12.5.sp,
-            fontFamily = FontFamily.Monospace, textAlign = TextAlign.End)
+        Text(
+            value, color = Ink.tx, fontSize = 12.5.sp,
+            fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
+        )
     }
 }
 
@@ -431,7 +366,7 @@ fun tempFrac(c: Double?): Float {
 fun SensorTile(
     name: String,
     desc: String,
-    valueLines: List<Pair<String, String>>,   // (数值, 单位)
+    valueLines: List<Pair<String, String>>,
     iconBg: Color,
     dotColor: Color,
     modifier: Modifier = Modifier,
@@ -439,36 +374,39 @@ fun SensorTile(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(CardShape)
+            .clip(RoundedCornerShape(14.dp))
             .background(Ink.card)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(22.dp))
+                .size(42.dp)
+                .clip(RoundedCornerShape(14.dp))
                 .background(iconBg),
             contentAlignment = Alignment.Center,
         ) {
-            Box(Modifier.size(10.dp).clip(RoundedCornerShape(5.dp)).background(dotColor))
+            Box(Modifier.size(10.dp).clip(CircleShape).background(dotColor))
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(name, color = Ink.tx, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Text(desc, color = Ink.tx2, fontSize = 11.5.sp)
             Spacer(Modifier.height(6.dp))
-            // 多轴等宽均分，窄屏不裁切（1 轴占满，3 轴各 1/3）
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 valueLines.forEach { (v, u) ->
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
-                        Text(v, color = Ink.accent, fontSize = 13.sp, maxLines = 1,
+                        Text(
+                            v, color = Ink.accent, fontSize = 13.sp, maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium)
+                            fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium,
+                        )
                         if (u.isNotEmpty()) {
                             Spacer(Modifier.width(2.dp))
-                            Text(u, color = Ink.off, fontSize = 9.5.sp, maxLines = 1,
-                                overflow = TextOverflow.Ellipsis)
+                            Text(
+                                u, color = Ink.off, fontSize = 9.5.sp, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                     }
                 }
@@ -477,7 +415,7 @@ fun SensorTile(
     }
 }
 
-/** 设置行（iOS 列表行：左标题 / 右控件或值） */
+/** 设置行（旧 API，保留）：左标题/副标题 + 右侧控件 */
 @Composable
 fun SettingRow(
     title: String,
@@ -485,18 +423,18 @@ fun SettingRow(
     trailing: @Composable () -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 11.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, color = Ink.tx, fontSize = 14.sp)
-            if (sub != null) Text(sub, color = Ink.tx2, fontSize = 11.5.sp)
+            Text(title, color = Ink.tx, fontSize = 16.sp)
+            if (sub != null) Text(sub, color = Ink.tx2, fontSize = 12.5.sp)
         }
         trailing()
     }
 }
 
-/** 按钮：accent 实底 / 普通浅底；ripple 在底色之上，48dp 最小触控目标 */
+/** 按钮（旧 API，保留）：主色实底 / 普通浅底 */
 @Composable
 fun ProbeButton(
     text: String,
@@ -504,64 +442,392 @@ fun ProbeButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (accent) {
+        AppPrimaryButton(text = text, onClick = onClick, modifier = modifier)
+    } else {
+        AppButton(
+            onClick = onClick,
+            modifier = modifier,
+            shape = AppShapes.container(ContainerLevel.Pill),
+            containerColor = Ink.panel,
+            contentColor = Ink.accent,
+        ) {
+            Text(
+                text,
+                color = Ink.accent,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+            )
+        }
+    }
+}
+
+/* ============================================================
+ * v3.0 新增组件：供数据屏/功能页使用（BiliPai 版式的基础积木）
+ * ============================================================ */
+
+/** 页面大标题（BiliPai 大标题 + 副标题） */
+@Composable
+fun MioPageHeader(
+    title: String,
+    subtitle: String? = null,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 6.dp),
+    ) {
+        AppText(
+            text = title,
+            color = Ink.tx,
+            fontSize = 32.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = (-0.3).sp,
+        )
+        if (!subtitle.isNullOrEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            Text(subtitle, color = Ink.tx2, fontSize = 14.sp, lineHeight = 20.sp)
+        }
+    }
+}
+
+/** 分组小标题（Miuix SmallTitle 风格） */
+@Composable
+fun MioSectionHeader(
+    title: String,
+    trailing: (@Composable () -> Unit)? = null,
+    modifier: Modifier = Modifier,
+) {
     Row(
         modifier = modifier
-            .pressClick(onClick = onClick)   // v20.7: 提到最外层，整钮含底色一起按压缩放
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (accent) Ink.accent else Ink.panel)
-            .defaultMinSize(minHeight = 48.dp)
-            .padding(horizontal = 14.dp, vertical = 9.dp),
-        horizontalArrangement = Arrangement.Center,
+            .fillMaxWidth()
+            .padding(top = 10.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, color = if (accent) Ink.onAccent else Ink.accent, fontSize = 13.sp,
-            fontWeight = if (accent) FontWeight.SemiBold else FontWeight.Medium)
+        AppText(
+            text = title,
+            color = Ink.tx2,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        trailing?.invoke()
     }
+}
+
+/** Miuix 卡片（比 ProbeCard 多 contentPadding 控制） */
+@Composable
+fun MioCard(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    contentPadding: PaddingValues = PaddingValues(16.dp),
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    AppCard(
+        modifier = modifier.fillMaxWidth(),
+        shape = AppCardShape.Semantic(ContainerLevel.Card),
+        onClick = onClick,
+    ) {
+        Column(Modifier.fillMaxWidth().padding(contentPadding), content = content)
+    }
+}
+
+/** 大号指标块：标签 + 大数字 + 单位（卡片内两列均分用） */
+@Composable
+fun ColumnScope.MioMetric(
+    label: String,
+    value: String,
+    unit: String = "",
+    color: Color = Ink.accent,
+    animated: Float? = null,
+    format: (Float) -> String = { "%.0f".format(it) },
+    valueSizeSp: Int = 30,
+    mono: Boolean = true,
+    sub: String? = null,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(label, color = Ink.tx2, fontSize = 12.sp)
+        Spacer(Modifier.height(5.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            if (animated != null) {
+                AnimatedNum(
+                    target = animated,
+                    format = format,
+                    color = color,
+                    sizeSp = valueSizeSp,
+                    mono = mono,
+                    weight = FontWeight.SemiBold,
+                )
+            } else {
+                Text(
+                    value, color = color, fontSize = valueSizeSp.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = if (mono) FontFamily.Monospace else FontFamily.Default,
+                )
+            }
+            if (unit.isNotEmpty()) {
+                Spacer(Modifier.width(3.dp))
+                Text(unit, color = Ink.off, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
+            }
+        }
+        if (sub != null) {
+            Spacer(Modifier.height(3.dp))
+            Text(sub, color = Ink.off, fontSize = 10.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** 胶囊 chip（提权/状态/单位标签） */
+@Composable
+fun MioChip(
+    text: String,
+    color: Color = Ink.accent,
+    containerColor: Color = color.copy(alpha = 0.14f),
+    mono: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(9.dp))
+            .background(containerColor)
+            .padding(horizontal = 7.dp, vertical = 3.dp),
+    ) {
+        Text(
+            text,
+            color = color,
+            fontSize = 11.sp,
+            fontFamily = if (mono) FontFamily.Monospace else null,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+        )
+    }
+}
+
+/** 信息行（新 API）：名称 / 数值 / 单位 / 状态点 */
+@Composable
+fun MioInfoRow(
+    name: String,
+    value: String,
+    unit: String = "",
+    stateColor: Color? = null,
+    mono: Boolean = true,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (stateColor != null) {
+            Box(Modifier.size(6.dp).clip(CircleShape).background(stateColor))
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            name, color = Ink.tx, fontSize = 14.5.sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        )
+        Text(
+            value, color = if (mono) Ink.tx else Ink.tx2,
+            fontSize = 14.5.sp,
+            fontFamily = if (mono) FontFamily.Monospace else null,
+            fontWeight = FontWeight.Medium,
+        )
+        if (unit.isNotEmpty()) {
+            Spacer(Modifier.width(3.dp))
+            Text(unit, color = Ink.off, fontSize = 11.sp)
+        }
+    }
+}
+
+/** 进度条行（新 API） */
+@Composable
+fun MioBarRow(
+    name: String,
+    frac: Float,
+    value: String,
+    barColor: Color,
+    nameWidth: Dp = 88.dp,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            name, color = Ink.tx, fontSize = 13.sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(nameWidth),
+        )
+        Spacer(Modifier.width(10.dp))
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(10.dp)
+                .clip(RoundedCornerShape(5.dp))
+                .background(Ink.panel),
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth(frac.coerceIn(0f, 1f))
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(barColor),
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            value, color = Ink.tx2, fontSize = 12.5.sp,
+            fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
+        )
+    }
+}
+
+/** 开关设置行（Miuix 风格） */
+@Composable
+fun MioSwitchRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    subtitle: String? = null,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+) {
+    AppSwitchPreference(
+        title = title,
+        subtitle = subtitle,
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        enabled = enabled,
+    )
+}
+
+/** 选择/导航设置行（Miuix 风格，右侧值 + chevron） */
+@Composable
+fun MioChoiceRow(
+    title: String,
+    value: String? = null,
+    onClick: (() -> Unit)? = null,
+    subtitle: String? = null,
+    modifier: Modifier = Modifier,
+) {
+    AppPreference(
+        title = title,
+        subtitle = subtitle,
+        value = value,
+        onClick = onClick,
+        showChevron = onClick != null,
+    )
+}
+
+/** 信息展示设置行（无 chevron） */
+@Composable
+fun MioSettingRow(
+    title: String,
+    value: String,
+    subtitle: String? = null,
+) {
+    AppPreference(
+        title = title,
+        subtitle = subtitle,
+        value = value,
+        onClick = null,
+        showChevron = false,
+    )
+}
+
+/** 分组卡片容器（设置页）：AppCard + 行间分割线由组件自绘 */
+@Composable
+fun MioPreferenceGroup(
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    AppCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = AppCardShape.Semantic(ContainerLevel.Card),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) { content() }
+    }
+}
+
+/** 页面返回条（功能页用：圆形返回 + 居中标题，BiliPai 设置页风格） */
+@Composable
+fun MioPageTopBar(
+    title: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    action: (@Composable () -> Unit)? = null,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .height(56.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Ink.panel)
+                .clickable(onClick = onBack),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Rounded.ArrowBackIosNew,
+                contentDescription = "返回",
+                tint = Ink.tx,
+                modifier = Modifier.size(17.dp),
+            )
+        }
+        Text(
+            title,
+            color = Ink.tx,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.align(Alignment.Center),
+        )
+        if (action != null) {
+            Box(Modifier.align(Alignment.CenterEnd)) { action() }
+        }
+    }
+}
+
+/** 分割线 */
+@Composable
+fun MioDivider(modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(0.5.dp)
+            .background(Ink.divider),
+    )
 }
 
 /**
  * v20.6：iOS 动效对齐——统一时长/弹簧/呼吸参数。
- * 依据：Apple HIG 与 SwiftUI（iOS17 起默认物理弹簧 response≈0.55；
- * 微交互 130-200ms；标准转场 200-350ms；Reduce Motion 需降级直切）。
- *  - numTween：250ms FastOutSlowIn → 监控数字平滑滑入，有静止时刻
- *  - barSpring：smooth 系（临界阻尼，无回弹，响应≈0.28s）→ 进度条/电量环
- * v20.16(P0-2)：数字从弹簧(0.82阻尼永远 settle 不下来，1s 采样下无一刻静止)
- * 改 tween——诊断确认"果冻晃"是整体奇怪感来源之一。
+ * v3.0：保留手感，数值与 BiliPai 的 Miuix 动效基线对齐。
  */
 object Motion {
-    /** 统一缓动曲线：全工程动效只用这一条（柔和克制的进出场） */
+    /** 统一缓动曲线 */
     val easing = FastOutSlowInEasing
 
-    /** 柔和回弹（松开恢复 / 指示器落位 / overscroll 归位）：欠阻尼但很快收敛 */
-    fun <T> softSpring(): androidx.compose.animation.core.SpringSpec<T> =
-        spring(dampingRatio = 0.72f, stiffness = 320f)
+    /** 柔和回弹（松开恢复 / 指示器落位 / overscroll 归位） */
+    fun <T> softSpring(): SpringSpec<T> = spring(dampingRatio = 0.72f, stiffness = 320f)
 
-    /** 按压反馈：iOS pressSpring ≈ 0.14s */
     const val pressMs = 130
-    /** 松开恢复：略长于按下，形成"按下快、回弹慢"的自然手感 */
     const val releaseMs = 240
-    /** 数字滚动：tween 320ms（v0.28.8 由 250ms 放宽，CPU/温度/内存数值更平顺） */
     const val numMs = 320
-    /** 进度条/环形：smooth 临界阻尼快速弹簧 */
     val barSpring = spring<Float>(dampingRatio = 1f, stiffness = 520f)
-    /** tab 切换淡入（iOS tab 无转场，极短淡入） */
     const val tabMs = 150
-    /** 电量环转动时长 */
     const val gaugeMs = 300
-    /** 曲线最新点脉冲时长 */
     const val pulseMs = 340
-    /** 数字小幅变化短 tween 时长 */
     const val numSmallMs = 220
-    /** 底部 Tab 指示器滑动 */
     const val indicatorMs = 280
-    /** 卡片滚动高光流动一个周期 */
     const val sheenMs = 1600
 }
 
 /**
- * v20.6：Reduce Motion 无障碍——读取系统动画缩放（ANIMATOR_DURATION_SCALE）。
- * 缩放=0（用户关闭动画）时返回 0，调用方应 snapTo 直切而非动画。
- * ContentObserver 监听变化，用户切换设置实时生效。
+ * Reduce Motion 无障碍——读取系统动画缩放（ANIMATOR_DURATION_SCALE）。
+ * 缩放=0 时返回 0，调用方应 snapTo 直切而非动画。
  */
 @Composable
 fun rememberAnimatorScale(): Float {
@@ -571,26 +837,26 @@ fun rememberAnimatorScale(): Float {
         val resolver: ContentResolver = ctx.contentResolver
         fun read() {
             scale = Settings.Global.getFloat(
-                resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+                resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f,
+            )
         }
         read()
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
-            override fun onChange(selfChange: Boolean) { read() }
+            override fun onChange(selfChange: Boolean) {
+                read()
+            }
         }
         resolver.registerContentObserver(
             Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE),
-            false, observer)
+            false, observer,
+        )
         onDispose { resolver.unregisterContentObserver(observer) }
     }
     return scale
 }
 
 /**
- * v20.4/20.5 手感层：数字平滑滚动（iOS 计数器感）。
- * 首次直接定位（不从头滚上来）。v20.16(P0-1/P0-2)：
- *  - 删除呼吸缩放（13 个数字每秒同步"鼓一下"是满屏蠕动的元凶）；
- *  - spring 改 tween(250ms)——数字有静止时刻，不再果冻晃。
- * target=null 显示 "–"。
+ * 数字平滑滚动（iOS 计数器感）；首次直接定位。
  */
 @Composable
 fun AnimatedNum(
@@ -600,12 +866,14 @@ fun AnimatedNum(
     sizeSp: Int = 26,
     weight: FontWeight = FontWeight.SemiBold,
     mono: Boolean = true,
-    rollFromZero: Boolean = false,   // v20.20(P1-1): 冷启动 hero 从 0 滚入（进程级只滚一次）
+    rollFromZero: Boolean = false,
     onRolled: () -> Unit = {},
 ) {
     if (target == null) {
-        Text("–", color = color, fontSize = sizeSp.sp,
-            fontWeight = weight, fontFamily = if (mono) FontFamily.Monospace else null)
+        Text(
+            "–", color = color, fontSize = sizeSp.sp,
+            fontWeight = weight, fontFamily = if (mono) FontFamily.Monospace else null,
+        )
         return
     }
     val anim = remember { Animatable(target) }
@@ -613,23 +881,21 @@ fun AnimatedNum(
     val scrolling = LocalScrolling.current
     var first by remember { mutableStateOf(true) }
     LaunchedEffect(target, rollFromZero, scrolling) {
-        // v0.28.3: 页面滚动中数字直切——数字滚动动画帧不再与滚动帧叠加（卡顿根因之一）
-        if (scrolling) { anim.snapTo(target); return@LaunchedEffect }
+        if (scrolling) {
+            anim.snapTo(target)
+            return@LaunchedEffect
+        }
         if (rollFromZero && animScale > 0f) {
-            // v20.20(P1-1): 首帧从 0 滚入——旧实现 Animatable 初始值=目标值导致永不播放；
-            // 先 snapTo(0) 再 animateTo，滚完回调关闭开关（切 tab 回来不再重滚）
             anim.snapTo(0f)
             anim.animateTo(target, tween(durationMillis = 420, easing = FastOutSlowInEasing))
             onRolled()
         } else if (first) {
             first = false
             anim.snapTo(target)
-        }
-        else if (animScale <= 0f) { anim.snapTo(target) }   // Reduce Motion：直切
-        else {
+        } else if (animScale <= 0f) {
+            anim.snapTo(target)
+        } else {
             val diff = kotlin.math.abs(target - anim.value)
-            // v0.28.0: 值无实质变化直接定位——静止时不再触发 150ms 动画（每秒 13 个数字
-            // 空转动画 = 整页持续重组的元凶之一）。0.03..0.5 平滑小步，>0.5 全速滚动。
             if (diff <= 0.03f) {
                 anim.snapTo(target)
             } else if (diff <= 0.5f) {
@@ -639,21 +905,15 @@ fun AnimatedNum(
             }
         }
     }
-    // v20.16(P0-1): 呼吸缩放已删除——数值亚像素抖动也触发放大，满屏数字同步蠕动，
-    // 是"有东西在动但定位不到"的直接来源。数字只保留值滚动动画。
-    Text(format(anim.value), color = color, fontSize = sizeSp.sp,
-        fontWeight = weight, fontFamily = if (mono) FontFamily.Monospace else null)
+    Text(
+        format(anim.value), color = color, fontSize = sizeSp.sp,
+        fontWeight = weight, fontFamily = if (mono) FontFamily.Monospace else null,
+    )
 }
 
-/** v20.5 / v0.28.8 按压反馈：按下轻微收缩 + 明暗下沉，抬起平滑恢复（统一用 Motion.easing）。
- *  按下 130ms、松开 240ms——"按得快、回得慢"是 iOS 手感的关键。
- *  haptic=true 时附一次极轻震动（仅用于有明确结果的按钮，避免满屏都震）。
- *  注意：卡片级的"阴影变化"由 ProbeCard 处理（它持有 shadow 修饰符），此处只管形状与明暗。 */
-/** 兼容入口：保持 onClick 为唯一参数，既支持 `pressClick(onOpen)` 位置调用，
- *  也支持 `pressClick { ... }` 尾随 lambda（工程内两种写法都有）。 */
+/** 按压反馈：按下轻微收缩 + 明暗下沉，抬起平滑恢复 */
 fun Modifier.pressClick(onClick: () -> Unit): Modifier = pressClickStyled(onClick = onClick)
 
-/** 可调参版本：缩放幅度 / 明暗下沉 / 是否附轻震。 */
 fun Modifier.pressClickStyled(
     scale: Float = 0.975f,
     dim: Float = 0.94f,
@@ -667,10 +927,12 @@ fun Modifier.pressClickStyled(
     val ms = if (pressed) Motion.pressMs else Motion.releaseMs
     val s by animateFloatAsState(
         if (pressed && animate) scale else 1f,
-        tween(durationMillis = ms, easing = Motion.easing), label = "pressScale")
+        tween(durationMillis = ms, easing = Motion.easing), label = "pressScale",
+    )
     val a by animateFloatAsState(
         if (pressed && animate) dim else 1f,
-        tween(durationMillis = ms, easing = Motion.easing), label = "pressDim")
+        tween(durationMillis = ms, easing = Motion.easing), label = "pressDim",
+    )
     val haptics = rememberHaptics()
     this
         .graphicsLayer { scaleX = s; scaleY = s; alpha = a }
@@ -684,10 +946,7 @@ fun Modifier.pressClickStyled(
 }
 
 /**
- * v20.7: 液态玻璃外壳（iOS 26 Liquid Glass 质感，学自 WWDC25 设计语言）。
- * 半透明着色 + 背景模糊（RenderEffect，API31+ 即 Android12 可用，A41 正好支持）+
- * 顶部高光描边（垂直渐变白边）+ 柔和阴影。
- * 克制原则：仅用于外壳层（顶栏 / 底部导航 / 悬浮件），内容卡片保持白卡。
+ * 液态玻璃外壳（旧 API 保留；新外壳页可用 MioGlass 系列）。
  */
 fun Modifier.liquidGlass(
     shape: Shape,
@@ -695,31 +954,21 @@ fun Modifier.liquidGlass(
     alpha: Float = 0.66f,
     shadow: Dp = 4.dp,
 ): Modifier = composed {
-    // v20.8: 不再用 renderEffect blur——Compose 的 renderEffect 作用于整个 layer，
-    // 会把条上的文字一起模糊（v20.7 真机"上下字看不清"根因）。
-    // 玻璃质感由 垂直渐变半透明 + 顶部高光描边 + 柔和阴影 呈现，文字零模糊。
     val top = tint.copy(alpha = (alpha + 0.16f).coerceAtMost(0.94f))
     val bottom = tint.copy(alpha = (alpha - 0.18f).coerceAtLeast(0.22f))
     this
         .shadow(shadow, shape, clip = false)
-        .background(
-            Brush.verticalGradient(0f to top, 1f to bottom),
-            shape,
-        )
+        .background(Brush.verticalGradient(0f to top, 1f to bottom), shape)
         .border(
             width = 1.dp,
             brush = Brush.verticalGradient(
-                listOf(
-                    Color.White.copy(alpha = 0.85f),
-                    Color.White.copy(alpha = 0.28f),
-                )
+                listOf(Color.White.copy(alpha = 0.85f), Color.White.copy(alpha = 0.28f)),
             ),
             shape = shape,
         )
 }
 
-/** v20.4/20.6 手感层：进度条平滑过渡（频率条/内存条/温度条共用）。
- *  v20.6：tween(420ms) → smooth 临界阻尼弹簧；支持 Reduce Motion 直切 */
+/** 进度条平滑过渡（频率条/内存条/温度条共用） */
 @Composable
 fun AnimatedFracBar(
     frac: Float,
@@ -733,11 +982,15 @@ fun AnimatedFracBar(
     val animScale = rememberAnimatorScale()
     val scrolling = LocalScrolling.current
     LaunchedEffect(target, scrolling) {
-        // v0.28.3: 滚动中进度条直切
-        if (scrolling || animScale <= 0f) a.snapTo(target)
-        else a.animateTo(target, Motion.barSpring)
+        if (scrolling || animScale <= 0f) a.snapTo(target) else a.animateTo(target, Motion.barSpring)
     }
-    Box(Modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(corner)).background(trackColor)) {
-        Box(Modifier.fillMaxWidth(a.value).height(height).clip(RoundedCornerShape(corner)).background(color))
+    Box(
+        Modifier.fillMaxWidth().height(height)
+            .clip(RoundedCornerShape(corner)).background(trackColor),
+    ) {
+        Box(
+            Modifier.fillMaxWidth(a.value).height(height)
+                .clip(RoundedCornerShape(corner)).background(color),
+        )
     }
 }
