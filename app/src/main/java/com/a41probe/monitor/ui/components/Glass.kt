@@ -140,6 +140,53 @@ object BottomBarStyleConfig {
     }
 }
 
+/**
+ * v3.10 界面质感三档：把原「液态玻璃 / 玻璃透明度 / 底部导航栏」收敛成一个选择。
+ * 只改 UI 入口与档位组合，内部 GlassLevel/GlassTransparency/BottomBarStyle 仍保留。
+ */
+enum class InterfaceTexture(val label: String, val summary: String) {
+    OFF("关闭", "Mio 最初样式：实色卡片 + Mio 简版底栏"),
+    MIO_SIMPLE("Mio 简版", "半透卡片 + Mio 简版底栏"),
+    FULL_CLEAR("全透", "全透玻璃卡片 + 液态玻璃底栏");
+
+    val glassLevel: GlassLevel
+        get() = when (this) {
+            OFF -> GlassLevel.OFF
+            MIO_SIMPLE -> GlassLevel.LITE
+            FULL_CLEAR -> GlassLevel.FULL
+        }
+
+    val transparency: GlassTransparency
+        get() = if (this == FULL_CLEAR) GlassTransparency.ULTRA else GlassTransparency.MEDIUM
+
+    val bottomBarStyle: BottomBarStyle
+        get() = if (this == FULL_CLEAR) BottomBarStyle.BILIPAI else BottomBarStyle.MIO
+
+    companion object {
+        fun fromGlassLevel(level: GlassLevel): InterfaceTexture = when (level) {
+            GlassLevel.OFF -> OFF
+            GlassLevel.LITE -> MIO_SIMPLE
+            GlassLevel.FULL -> FULL_CLEAR
+        }
+    }
+}
+
+/** 界面质感读写：一次写入玻璃档位、透明度、底部栏三个旧键，保持向后兼容。 */
+object InterfaceTextureConfig {
+    val modes: List<InterfaceTexture> = InterfaceTexture.entries
+
+    fun current(): InterfaceTexture = InterfaceTexture.fromGlassLevel(GlassConfig.current())
+
+    fun select(ctx: Context, mode: InterfaceTexture) {
+        GlassConfig.set(ctx, mode.glassLevel)
+        GlassTransparencyConfig.set(ctx, mode.transparency)
+        BottomBarStyleConfig.set(ctx, mode.bottomBarStyle)
+    }
+
+    /** 启动时把旧四档/旧底栏设置规范化到三档（旧 FULL 自动落到全透）。 */
+    fun normalize(ctx: Context) = select(ctx, current())
+}
+
 /* ---- 滚动上下文：各页面 LazyColumn 写入，顶栏/动画组件读取 ---- */
 
 /** 页面列表是否正在滚动（滚动中动画组件自动直切，避免掉帧） */

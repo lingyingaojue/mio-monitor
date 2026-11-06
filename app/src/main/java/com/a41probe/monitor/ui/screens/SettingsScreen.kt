@@ -65,13 +65,9 @@ import com.a41probe.monitor.data.MonitorViewModel
 import com.a41probe.monitor.data.RootBridge
 import com.a41probe.monitor.data.ShizukuBridge
 import com.a41probe.monitor.data.ThermalReader
-import com.a41probe.monitor.ui.components.BottomBarStyle
-import com.a41probe.monitor.ui.components.BottomBarStyleConfig
 import com.a41probe.monitor.ui.components.DotBadge
-import com.a41probe.monitor.ui.components.GlassConfig
-import com.a41probe.monitor.ui.components.GlassLevel
-import com.a41probe.monitor.ui.components.GlassTransparency
-import com.a41probe.monitor.ui.components.GlassTransparencyConfig
+import com.a41probe.monitor.ui.components.InterfaceTexture
+import com.a41probe.monitor.ui.components.InterfaceTextureConfig
 import com.a41probe.monitor.ui.components.HapticLevel
 import com.a41probe.monitor.ui.components.MioCard
 import com.a41probe.monitor.ui.components.MioChoiceRow
@@ -89,7 +85,6 @@ import com.a41probe.monitor.ui.components.rememberHaptics
 import com.a41probe.monitor.ui.glass.LocalMioChromeInsets
 import com.a41probe.monitor.ui.glass.MioGlassSheetSurface
 import com.a41probe.monitor.ui.glass.currentGlassCapability
-import com.a41probe.monitor.ui.glass.liquidEngineLabel
 import com.a41probe.monitor.ui.theme.Ink
 import com.a41probe.monitor.ui.theme.Palette
 import com.a41probe.monitor.ui.theme.Palettes
@@ -112,22 +107,12 @@ import kotlinx.coroutines.withContext
  * 业务行为与持久化键完全沿用旧实现：
  *  - ThemeConfig  : 明暗模式 / 配色预设 / 角色立绘开关
  *  - SpecialConfig: 角色预设（整组立绘 + 配色）
- *  - GlassConfig  : 液态玻璃三档 + 全局玻璃透明度四档
+ *  - GlassConfig  : 界面质感三档（关闭 / Mio 简版 / 全透）
  *  - MioHaptics   : 触感强度（按住持续震、轻点选中）
  *  - CSV 导出、Shizuku/Root 提权通道、双模式入口、采样/数据/设备信息/关于
  * ============================================================ */
 
-private val GLASS_LEVELS = listOf(GlassLevel.FULL, GlassLevel.LITE, GlassLevel.OFF)
-private val GLASS_LABELS = listOf("完整", "简约", "关闭")
-private val GLASS_TRANSPARENCY_LEVELS = listOf(
-    GlassTransparency.LOW,
-    GlassTransparency.MEDIUM,
-    GlassTransparency.HIGH,
-    GlassTransparency.ULTRA,
-)
-private val GLASS_TRANSPARENCY_LABELS = listOf("低", "中", "高", "全透")
-private val BOTTOM_BAR_STYLES = listOf(BottomBarStyle.BILIPAI, BottomBarStyle.MIO)
-private val BOTTOM_BAR_LABELS = listOf("BiliPai 原版", "Mio 简版")
+// v3.10：原液态玻璃/玻璃透明度/底部导航栏三组设置，收敛为「界面质感」三选一
 private val HAPTIC_LEVELS = listOf(HapticLevel.LIGHT, HapticLevel.MEDIUM, HapticLevel.HEAVY)
 private val HAPTIC_LABELS = listOf("轻", "中", "重")
 
@@ -468,9 +453,7 @@ fun SettingsScreen(
     var showModeSheet by remember { mutableStateOf(false) }
     var palSel by remember { mutableStateOf<Palette>(ThemeConfig.palette()) }
     var artwork by remember { mutableStateOf(ThemeConfig.showArtwork()) }
-    var glassSel by remember { mutableStateOf(GlassConfig.current()) }
-    var transparencySel by remember { mutableStateOf(GlassTransparencyConfig.current()) }
-    var barStyle by remember { mutableStateOf(BottomBarStyleConfig.current()) }
+    var textureMode by remember { mutableStateOf(InterfaceTextureConfig.current()) }
     var hapticSel by remember { mutableStateOf(MioHaptics.current()) }
     var specSel by remember { mutableStateOf<SpecialTheme>(SpecialConfig.current()) }
     val haptics = rememberHaptics()
@@ -537,57 +520,6 @@ fun SettingsScreen(
                                     },
                                 )
                             }
-                            // v3.3 液态玻璃三档：完整（最通透，Miuix Backdrop 折射）/ 简约（仅外壳玻璃、卡片更实更省电）/ 关闭（实色）
-                            SegmentSetting(
-                                title = "液态玻璃",
-                                subtitle = when {
-                                    cap.sdkInt >= Build.VERSION_CODES.TIRAMISU ->
-                                        "完整 = 全表面液态玻璃（实时折射 + 高光）；简约 = 仅外壳玻璃、卡片更实更省电；关闭 = 实色"
-                                    cap.sdkInt >= Build.VERSION_CODES.S ->
-                                        "完整 = 全表面实时模糊；简约 = 仅外壳模糊、卡片更实更省电；关闭 = 实色"
-                                    else -> "当前系统不支持实时模糊，玻璃为半透明材质；关闭 = 实色"
-                                },
-                                labels = GLASS_LABELS,
-                                selectedIndex = GLASS_LEVELS.indexOf(glassSel).coerceAtLeast(0),
-                                onSelect = { idx ->
-                                    glassSel = GLASS_LEVELS[idx]
-                                    GlassConfig.set(ctx, GLASS_LEVELS[idx])
-                                },
-                            )
-                            // v3.6 全局玻璃透明度四档：只缩放玻璃填充 alpha，不改模糊/折射/可读层
-                            SegmentSetting(
-                                title = "玻璃透明度",
-                                subtitle = "低 = OriginOS 高级材质参考（强模糊 + 透彩色）；中 / 高 / 全透逐级更透，全透不带 tint；" +
-                                    "只缩放玻璃填充浓度，可读层与模糊/折射不变；液态玻璃关闭时不生效",
-                                labels = GLASS_TRANSPARENCY_LABELS,
-                                selectedIndex = GLASS_TRANSPARENCY_LEVELS
-                                    .indexOf(transparencySel).coerceAtLeast(0),
-                                onSelect = { idx ->
-                                    transparencySel = GLASS_TRANSPARENCY_LEVELS[idx]
-                                    GlassTransparencyConfig.set(
-                                        ctx,
-                                        GLASS_TRANSPARENCY_LEVELS[idx],
-                                    )
-                                },
-                            )                            // 只读自检行：一眼确认当前实际走的渲染引擎（排查"看起来不像玻璃"最有效）
-                            MioSettingRow(
-                                title = "玻璃引擎",
-                                value = liquidEngineLabel(
-                                    cap,
-                                    bottomBarBiliPai = barStyle == BottomBarStyle.BILIPAI,
-                                ),
-                            )
-                            // v3.4：底部导航栏实现 —— 默认直接使用 BiliPai 原版 FloatingBottomBar
-                            SegmentSetting(
-                                title = "底部导航栏",
-                                subtitle = "BiliPai 原版 = 直接使用 BiliPai 开源项目的 FloatingBottomBar（实时折射、拖动选择、重力高光；需 Android 13+）；Mio 简版 = Haze 玻璃 dock",
-                                labels = BOTTOM_BAR_LABELS,
-                                selectedIndex = BOTTOM_BAR_STYLES.indexOf(barStyle).coerceAtLeast(0),
-                                onSelect = { idx ->
-                                    barStyle = BOTTOM_BAR_STYLES[idx]
-                                    BottomBarStyleConfig.set(ctx, BOTTOM_BAR_STYLES[idx])
-                                },
-                            )
                             SegmentSetting(
                                 title = "触感强度",
                                 subtitle = "按住「轻 / 中 / 重」任意一键可持续震动（松手即停），轻点选中该档",
@@ -609,6 +541,30 @@ fun SettingsScreen(
                                     else -> "×%.1f".format(animScale)
                                 },
                                 subtitle = "跟随系统「动画时长缩放」，不额外提供开关",
+                            )
+                        }
+                    }
+
+                    /* ---------------- 界面质感 ---------------- */
+                    item {
+                        MioSectionHeader(
+                            "界面质感",
+                            modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                        )
+                    }
+                    item {
+                        MioPreferenceGroup {
+                            SegmentSetting(
+                                title = "界面质感",
+                                subtitle = "关闭 = 实色；Mio 简版 = 半透卡片 + 简版底栏；全透 = 全透玻璃卡片 + 液态底栏",
+                                labels = InterfaceTexture.entries.map { it.label },
+                                selectedIndex = textureMode.ordinal
+                                    .coerceIn(0, InterfaceTexture.entries.lastIndex),
+                                onSelect = { idx ->
+                                    val mode = InterfaceTexture.entries[idx]
+                                    textureMode = mode
+                                    InterfaceTextureConfig.select(ctx, mode)
+                                },
                             )
                         }
                     }

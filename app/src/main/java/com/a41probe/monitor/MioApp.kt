@@ -5,6 +5,7 @@ import com.a41probe.monitor.data.toolbox.ToolboxConfig
 import com.a41probe.monitor.ui.components.BottomBarStyleConfig
 import com.a41probe.monitor.ui.components.GlassConfig
 import com.a41probe.monitor.ui.components.GlassTransparencyConfig
+import com.a41probe.monitor.ui.components.InterfaceTextureConfig
 import com.a41probe.monitor.ui.components.MioHaptics
 import com.a41probe.monitor.ui.theme.SpecialConfig
 import com.a41probe.monitor.ui.theme.ThemeConfig
@@ -23,6 +24,8 @@ class MioApp : Application() {
         GlassTransparencyConfig.init(this)
         // v3.4: 底部导航栏实现（BiliPai 原版 / Mio 简版），首帧即生效
         BottomBarStyleConfig.init(this)
+        // v3.10: 界面质感三档（关闭 / Mio 简版 / 全透），把旧四档设置规范化
+        InterfaceTextureConfig.normalize(this)
         // v3.5: OriginOS 调校配置（默认全关）
         ToolboxConfig.init(this)
         // v0.28.8: 触感反馈是否可用（读系统总开关），同样在早期确定
