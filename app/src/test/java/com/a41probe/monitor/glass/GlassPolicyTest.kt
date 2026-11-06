@@ -1,5 +1,6 @@
 package com.a41probe.monitor.glass
 
+import androidx.compose.ui.unit.dp
 import com.a41probe.monitor.ui.components.GlassLevel
 import com.a41probe.monitor.ui.glass.GlassRenderMode
 import com.a41probe.monitor.ui.glass.MioChromeInsets
@@ -10,7 +11,6 @@ import com.a41probe.monitor.ui.glass.resolveChromeFillAlpha
 import com.a41probe.monitor.ui.glass.resolveChromeProgress
 import com.a41probe.monitor.ui.glass.resolveGlassCapability
 import com.a41probe.monitor.ui.glass.resolveGlassGeometry
-import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -77,6 +77,7 @@ class GlassPolicyTest {
         val card = resolveGlassGeometry(MioGlassRole.CARD, full33, dark = false)
         assertTrue("卡片应有模糊", card.blurRadius.value > 0f)
         assertTrue("卡片应采样背景", card.hazeSampling)
+        assertTrue("卡片应有折射边", card.lensAlpha > 0f)
 
         val chrome = resolveGlassGeometry(MioGlassRole.CHROME, full33, dark = true)
         assertTrue("顶栏模糊应大于卡片", chrome.blurRadius.value > card.blurRadius.value)
@@ -88,7 +89,37 @@ class GlassPolicyTest {
         val offCard = resolveGlassGeometry(MioGlassRole.CARD, off, dark = false)
         assertEquals(1f, offCard.fillAlpha, 0.001f)
         assertEquals(0f, offCard.blurRadius.value, 0.001f)
-        assertEquals(0f, offCard.tintAlpha, 0.001f)
+        assertEquals(0f, offCard.tintMix, 0.001f)
+        assertEquals(0f, offCard.specularAlpha, 0.001f)
+    }
+
+    @Test
+    fun dockMaterialIsTranslucentNotSolid() {
+        val full31 = resolveGlassCapability(GlassLevel.FULL, 31)
+        val full26 = resolveGlassCapability(GlassLevel.FULL, 26)
+
+        val dockLight = resolveGlassGeometry(MioGlassRole.DOCK, full31, dark = false)
+        val dockDark = resolveGlassGeometry(MioGlassRole.DOCK, full31, dark = true)
+        // 关键回归：dock 必须"能透"（v3.1 是 0.60/0.62 = 视觉实色）
+        assertTrue("dock 浅色填充必须明显低于 0.40，实际 ${dockLight.fillAlpha}", dockLight.fillAlpha in 0.18f..0.40f)
+        assertTrue("dock 深色填充必须明显低于 0.48，实际 ${dockDark.fillAlpha}", dockDark.fillAlpha in 0.26f..0.48f)
+        assertTrue("dock 模糊半径 >= 28dp", dockLight.blurRadius.value >= 28f)
+        assertEquals(32.dp.value, dockLight.blurRadius.value, 0.001f)
+        assertTrue("dock 要有主题色 tint", dockLight.tintMix > 0.02f)
+        assertTrue("dock 要有折射环", dockLight.lensAlpha >= 0.25f)
+        assertTrue("dock 要有流动高光", dockLight.specularAlpha > 0.02f)
+        assertTrue(dockLight.hazeSampling)
+
+        // 卡片同样必须透
+        val cardLight = resolveGlassGeometry(MioGlassRole.CARD, full31, dark = false)
+        val cardDark = resolveGlassGeometry(MioGlassRole.CARD, full31, dark = true)
+        assertTrue("卡片浅色填充 <= 0.45，实际 ${cardLight.fillAlpha}", cardLight.fillAlpha <= 0.45f)
+        assertTrue("卡片深色填充 <= 0.52，实际 ${cardDark.fillAlpha}", cardDark.fillAlpha <= 0.52f)
+
+        // 系统无实时模糊时提高不透明度，但仍是半透明玻璃（不回到 0.6+ 实色）
+        val dockTint26 = resolveGlassGeometry(MioGlassRole.DOCK, full26, dark = false)
+        assertTrue(dockTint26.fillAlpha in 0.30f..0.58f)
+        assertEquals(0f, dockTint26.blurRadius.value, 0.001f)
     }
 
     @Test
@@ -108,17 +139,18 @@ class GlassPolicyTest {
 
     @Test
     fun chromeBlurAndFillRampWithProgress() {
-        val baseBlur = 24.dp
+        val baseBlur = 32.dp
         val atTop = resolveChromeBlurRadius(baseBlur, 0f).value
         val atBottom = resolveChromeBlurRadius(baseBlur, 1f).value
         assertTrue("顶部也应有轻微模糊", atTop > 0f)
         assertTrue("滚动后模糊更强", atBottom > atTop)
         assertEquals(baseBlur.value, atBottom, 0.001f)
 
-        val fillTop = resolveChromeFillAlpha(0.6f, 0f)
-        val fillBottom = resolveChromeFillAlpha(0.6f, 1f)
-        assertTrue(fillTop > 0f)
-        assertTrue(fillBottom > fillTop)
+        val baseFill = 0.36f
+        val fillTop = resolveChromeFillAlpha(baseFill, 0f)
+        val fillBottom = resolveChromeFillAlpha(baseFill, 1f)
+        assertTrue("滚到顶时顶栏应接近通透", fillTop <= 0.12f)
+        assertTrue("滚动后顶栏应有遮挡力", fillBottom >= 0.30f)
         assertTrue(fillBottom <= 1f)
     }
 

@@ -34,9 +34,10 @@ fun MioAmbientBackground(
     val accent = Ink.accent
     val accent2 = Ink.accent2
     val cool = Ink.clusterPerf
-    val a1 = if (dark) 0.20f else 0.16f
-    val a2 = if (dark) 0.15f else 0.12f
-    val a3 = if (dark) 0.12f else 0.09f
+    // v3.2：色团更艳、更大，尤其底部一团（dock 区域）——保证不滚动时玻璃下也有颜色可透
+    val a1 = if (dark) 0.24f else 0.20f
+    val a2 = if (dark) 0.18f else 0.16f
+    val a3 = if (dark) 0.22f else 0.20f
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -47,17 +48,17 @@ fun MioAmbientBackground(
                 val topRight = Brush.radialGradient(
                     colors = listOf(accent.copy(alpha = a1), Color.Transparent),
                     center = Offset(w * 0.92f, h * 0.04f),
-                    radius = w * 0.95f,
+                    radius = w * 1.0f,
                 )
                 val leftMid = Brush.radialGradient(
                     colors = listOf(accent2.copy(alpha = a2), Color.Transparent),
                     center = Offset(w * 0.02f, h * 0.52f),
-                    radius = w * 0.85f,
+                    radius = w * 0.9f,
                 )
                 val bottomCenter = Brush.radialGradient(
                     colors = listOf(cool.copy(alpha = a3), Color.Transparent),
-                    center = Offset(w * 0.55f, h * 0.98f),
-                    radius = w * 0.95f,
+                    center = Offset(w * 0.55f, h * 0.99f),
+                    radius = w * 1.15f,
                 )
                 onDrawBehind {
                     drawRect(topRight)
