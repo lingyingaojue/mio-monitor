@@ -61,6 +61,9 @@
 2. `core/ui/blur/RecoverableVisualEffects.kt`（新增精简文件）：只保留 FloatingBottomBar 闭包用到的
    `recoverableBlurEnabled`（固定 true，与 BiliPai 未注册 gate 时行为一致）与
    `shouldAllowRenderEffectBackedHazeEffect`（SDK>=31，逐字保留）。
+3. `feature/home/components/FloatingBottomBar.kt`（v3.11）：把内部 `rememberHapticFeedback(NAVIGATION)`
+   替换为 Mio 的 `rememberHaptics()`，让设置页「触感强度」对 dock 的点击/拖拽刻度生效；
+   其余 FloatingBottomBar 逻辑未改，BiliPai 原 `core/util/Haptics.kt` 保留但不再被 dock 使用。
 
 ### 许可
 

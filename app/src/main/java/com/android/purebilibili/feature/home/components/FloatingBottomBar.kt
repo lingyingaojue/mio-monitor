@@ -28,7 +28,6 @@ import android.os.SystemClock
 import androidx.compose.ui.platform.LocalViewConfiguration
 import com.android.purebilibili.core.ui.AppActionHaptics
 import com.android.purebilibili.core.util.HapticType
-import com.android.purebilibili.core.util.rememberHapticFeedback
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
@@ -716,12 +715,19 @@ fun FloatingBottomBar(
     val maxTabIndex = (safeTabsCount - 1).coerceAtLeast(0)
     val selectedIndexLatest = rememberUpdatedState(selectedIndex)
     val onSelectedLatest = rememberUpdatedState(onSelected)
-    val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION)
+    // Mio 3.11 补丁：底栏触感统一走 MioHaptics，让设置页「触感强度」对 dock 生效
+    val mioHaptics = com.a41probe.monitor.ui.components.rememberHaptics()
+    val haptic: (HapticType) -> Unit = remember(mioHaptics) {
+        { type ->
+            when (type) {
+                HapticType.HEAVY -> mioHaptics.press()
+                else -> mioHaptics.tick()
+            }
+        }
+    }
     val latestHaptic by rememberUpdatedState(haptic)
     val interactionEnabled by rememberUpdatedState(enabled)
-    val hapticsEnabled by rememberUpdatedState(
-        isLiquidGlassMode && enabled && com.android.purebilibili.core.ui.LocalAppThemeConfig.current.hapticFeedbackEnabled
-    )
+    val hapticsEnabled by rememberUpdatedState(isLiquidGlassMode && enabled)
     val touchSlopPx by rememberUpdatedState(LocalViewConfiguration.current.touchSlop)
     val gestureHaptics = remember(safeTabsCount, isLiquidGlassMode) { LiquidDockHapticPolicy() }
     val glassActionFeedback: (() -> Unit) -> Unit = { action ->

@@ -111,6 +111,7 @@ import com.a41probe.monitor.ui.screens.SensorsScreen
 import com.a41probe.monitor.ui.screens.SettingsScreen
 import com.a41probe.monitor.ui.screens.ThermalScreen
 import com.a41probe.monitor.ui.screens.ToolboxScreen
+import com.a41probe.monitor.ui.theme.ArtworkSize
 import com.a41probe.monitor.ui.theme.Ink
 import com.a41probe.monitor.ui.theme.MioTheme
 import com.a41probe.monitor.ui.theme.SpecialConfig
@@ -271,8 +272,9 @@ fun MainScreen(vm: MonitorViewModel = viewModel()) {
                     enabled = capability.enabled,
                     modifier = Modifier.fillMaxSize(),
                 )
-                if (isTab && ThemeConfig.showArtwork()) {
-                    MioArtBackground(special.artFor(artKeyFor(screen)))
+                val artSize = ThemeConfig.artworkSize()
+                if (isTab && artSize != ArtworkSize.OFF) {
+                    MioArtBackground(special.artFor(artKeyFor(screen)), size = artSize)
                 }
             }
 

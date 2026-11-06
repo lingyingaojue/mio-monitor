@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.a41probe.monitor.ui.theme.ArtworkSize
 import com.a41probe.monitor.ui.theme.Ink
 import com.a41probe.monitor.ui.theme.SpecialConfig
 
@@ -45,8 +46,12 @@ import com.a41probe.monitor.ui.theme.SpecialConfig
  * 注意：本组件只画立绘与可读性遮罩，页面底色/环境光由 MioAmbientBackground 负责。
  */
 @Composable
-fun MioArtBackground(art: Int, modifier: Modifier = Modifier) {
-    if (art == 0) return
+fun MioArtBackground(
+    art: Int,
+    modifier: Modifier = Modifier,
+    size: ArtworkSize = ArtworkSize.MEDIUM,
+) {
+    if (art == 0 || size == ArtworkSize.OFF) return
     // 深色底判断：Ink.bg 亮度 < 0.5 视为深色主题（Ink 令牌本身随主题即时变化）
     val dark = Ink.bg.luminance() < 0.5f
     val artAlpha = if (dark) 0.48f else 0.68f
@@ -64,7 +69,7 @@ fun MioArtBackground(art: Int, modifier: Modifier = Modifier) {
                 contentScale = ContentScale.FillHeight,
                 // v0.28.3: 离屏缓存——立绘成为固定位图，滚动时 GPU 直接合成缓存
                 // 层，不再每帧重新绘制 420dp 全幅透明 PNG（滑动卡顿根因之一）
-                modifier = Modifier.align(Alignment.BottomEnd).height(420.dp)
+                modifier = Modifier.align(Alignment.BottomEnd).height(size.heightDp.dp)
                     .graphicsLayer {
                         alpha = artAlpha
                         compositingStrategy = CompositingStrategy.Offscreen

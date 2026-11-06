@@ -77,7 +77,6 @@ import com.a41probe.monitor.ui.components.MioPageScaffold
 import com.a41probe.monitor.ui.components.MioPreferenceGroup
 import com.a41probe.monitor.ui.components.MioSectionHeader
 import com.a41probe.monitor.ui.components.MioSettingRow
-import com.a41probe.monitor.ui.components.MioSwitchRow
 import com.a41probe.monitor.ui.components.ProbeButton
 import com.a41probe.monitor.ui.components.ScrollAware
 import com.a41probe.monitor.ui.components.rememberAnimatorScale
@@ -88,6 +87,7 @@ import com.a41probe.monitor.ui.glass.currentGlassCapability
 import com.a41probe.monitor.ui.theme.Ink
 import com.a41probe.monitor.ui.theme.Palette
 import com.a41probe.monitor.ui.theme.Palettes
+import com.a41probe.monitor.ui.theme.ArtworkSize
 import com.a41probe.monitor.ui.theme.SpecialConfig
 import com.a41probe.monitor.ui.theme.SpecialTheme
 import com.a41probe.monitor.ui.theme.Specials
@@ -105,7 +105,7 @@ import kotlinx.coroutines.withContext
 /* ============================================================
  * 设置页（BiliPai / Miuix 版）：固定返回条 + 分组偏好列表。
  * 业务行为与持久化键完全沿用旧实现：
- *  - ThemeConfig  : 明暗模式 / 配色预设 / 角色立绘开关
+ *  - ThemeConfig  : 明暗模式 / 配色预设 / 角色立绘四档大小
  *  - SpecialConfig: 角色预设（整组立绘 + 配色）
  *  - GlassConfig  : 界面质感三档（关闭 / Mio 简版 / 全透）
  *  - MioHaptics   : 触感强度（按住持续震、轻点选中）
@@ -452,7 +452,7 @@ fun SettingsScreen(
     var mode by remember { mutableStateOf(ThemeConfig.mode()) }
     var showModeSheet by remember { mutableStateOf(false) }
     var palSel by remember { mutableStateOf<Palette>(ThemeConfig.palette()) }
-    var artwork by remember { mutableStateOf(ThemeConfig.showArtwork()) }
+    var artworkSize by remember { mutableStateOf(ThemeConfig.artworkSize()) }
     var textureMode by remember { mutableStateOf(InterfaceTextureConfig.current()) }
     var hapticSel by remember { mutableStateOf(MioHaptics.current()) }
     var specSel by remember { mutableStateOf<SpecialTheme>(SpecialConfig.current()) }
@@ -495,13 +495,16 @@ fun SettingsScreen(
                                     ThemeConfig.set(ctx, p)
                                 },
                             )
-                            MioSwitchRow(
-                                title = "显示角色立绘",
-                                subtitle = "页面背景展示当前角色插画",
-                                checked = artwork,
-                                onCheckedChange = { on ->
-                                    artwork = on
-                                    ThemeConfig.setArtwork(ctx, on)
+                            SegmentSetting(
+                                title = "角色立绘",
+                                subtitle = "关闭 / 小 / 中 / 大（只调大小，不换角色）",
+                                labels = ArtworkSize.entries.map { it.label },
+                                selectedIndex = artworkSize.ordinal
+                                    .coerceIn(0, ArtworkSize.entries.lastIndex),
+                                onSelect = { idx ->
+                                    val s = ArtworkSize.entries[idx]
+                                    artworkSize = s
+                                    ThemeConfig.setArtworkSize(ctx, s)
                                 },
                             )
                             val specials = Specials.all()

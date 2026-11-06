@@ -206,16 +206,34 @@ enum class ThemeMode(val id: String, val label: String) {
     }
 }
 
+/** 立绘大小（v3.11）：关闭 / 小 / 中 / 大。默认「中」= 旧 420dp。 */
+enum class ArtworkSize(val label: String, val heightDp: Int) {
+    OFF("关闭", 0),
+    SMALL("小", 300),
+    MEDIUM("中", 420),
+    LARGE("大", 540);
+
+    companion object {
+        fun of(ordinal: Int): ArtworkSize =
+            entries.firstOrNull { it.ordinal == ordinal } ?: MEDIUM
+    }
+}
+
+/** 旧版 boolean `show_artwork` 到四档的迁移映射。 */
+internal fun legacyArtworkSize(show: Boolean): ArtworkSize =
+    if (show) ArtworkSize.MEDIUM else ArtworkSize.OFF
+
 object ThemeConfig {
     private const val PREFS = "mio_theme"
     private const val KEY_ID = "palette_id"
     private const val KEY_MODE = "theme_mode"
     private const val KEY_ARTWORK = "show_artwork"
+    private const val KEY_ARTWORK_SIZE = "artwork_size"
 
     // Compose 状态：切换后 MioTheme / 设置页立即重组
     private val paletteState = mutableStateOf(Palettes.AZURE)
     private val modeState = mutableStateOf(ThemeMode.SYSTEM)
-    private val artworkState = mutableStateOf(true)
+    private val artworkSizeState = mutableStateOf(ArtworkSize.MEDIUM)
 
     fun init(ctx: Context) {
         val sp = runCatching {
@@ -224,7 +242,14 @@ object ThemeConfig {
         val id = runCatching { sp.getString(KEY_ID, "azure") }.getOrNull()
         paletteState.value = Palettes.of(id)
         modeState.value = ThemeMode.of(runCatching { sp.getString(KEY_MODE, "system") }.getOrNull())
-        artworkState.value = runCatching { sp.getBoolean(KEY_ARTWORK, true) }.getOrDefault(true)
+        artworkSizeState.value = runCatching {
+            if (sp.contains(KEY_ARTWORK_SIZE)) {
+                ArtworkSize.of(sp.getInt(KEY_ARTWORK_SIZE, ArtworkSize.MEDIUM.ordinal))
+            } else {
+                // v3.11 迁移：旧布尔开关 true=中，false=关闭
+                legacyArtworkSize(sp.getBoolean(KEY_ARTWORK, true))
+            }
+        }.getOrDefault(ArtworkSize.MEDIUM)
     }
 
     /** 兼容旧调用：设置配色预设。 */
@@ -244,11 +269,19 @@ object ThemeConfig {
         }
     }
 
+    /** 兼容旧调用：true=中，false=关闭。 */
     fun setArtwork(ctx: Context, show: Boolean) {
-        artworkState.value = show
+        setArtworkSize(ctx, legacyArtworkSize(show))
+    }
+
+    fun setArtworkSize(ctx: Context, size: ArtworkSize) {
+        artworkSizeState.value = size
         runCatching {
             ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putBoolean(KEY_ARTWORK, show).apply()
+                .edit()
+                .putInt(KEY_ARTWORK_SIZE, size.ordinal)
+                .putBoolean(KEY_ARTWORK, size != ArtworkSize.OFF)
+                .apply()
         }
     }
 
@@ -259,7 +292,9 @@ object ThemeConfig {
 
     fun mode(): ThemeMode = modeState.value
 
-    fun showArtwork(): Boolean = artworkState.value
+    fun artworkSize(): ArtworkSize = artworkSizeState.value
+
+    fun showArtwork(): Boolean = artworkSizeState.value != ArtworkSize.OFF
 
     /** 当前应使用的明暗模式（SYSTEM 时读系统设置）。 */
     @Composable
