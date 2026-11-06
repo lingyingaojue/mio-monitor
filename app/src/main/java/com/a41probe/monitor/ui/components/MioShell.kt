@@ -1,6 +1,5 @@
 package com.a41probe.monitor.ui.components
 
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -10,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -63,9 +64,7 @@ import com.a41probe.monitor.ui.glass.LocalMioGlass
 import com.a41probe.monitor.ui.glass.MioGlassRole
 import com.a41probe.monitor.ui.glass.MioGlassSurface
 import com.a41probe.monitor.ui.glass.TopBarHeight
-import com.a41probe.monitor.ui.glass.currentGlassCapability
 import com.a41probe.monitor.ui.glass.mioGlassGloss
-import com.a41probe.monitor.ui.glass.mioGlassSweep
 import com.a41probe.monitor.ui.theme.Ink
 import kotlinx.coroutines.delay
 
@@ -223,7 +222,6 @@ fun MioBottomDock(
     if (items.isEmpty()) return
     val animScale = rememberAnimatorScale()
     val haptics = rememberHaptics()
-    val capability = currentGlassCapability()
     val pos by animateFloatAsState(
         targetValue = selectedIndex.coerceIn(0, items.lastIndex).toFloat(),
         animationSpec = tween(
@@ -232,21 +230,16 @@ fun MioBottomDock(
         ),
         label = "dockIndicator",
     )
-    // 液态高光扫过（Reduce Motion / 无模糊引擎时关闭）
-    val sweep = if (animScale > 0f && capability.realtimeBlur) {
-        val tr = rememberInfiniteTransition(label = "dockSweep")
-        tr.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                tween(durationMillis = 7500, easing = LinearEasing),
-                RepeatMode.Restart,
-            ),
-            label = "sweep",
-        ).value
-    } else {
-        0f
-    }
+    // 选中胶囊的液态按压形变（按下时轻微收窄 / 拉高，像被按下去的玻璃镜片）
+    var pressedTab by remember { mutableIntStateOf(-1) }
+    val pressProgress by animateFloatAsState(
+        targetValue = if (pressedTab == selectedIndex) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = if (animScale > 0f) 140 else 0,
+            easing = Motion.easing,
+        ),
+        label = "indicatorPress",
+    )
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -264,38 +257,49 @@ fun MioBottomDock(
             role = MioGlassRole.DOCK,
         ) {
             Box(Modifier.fillMaxSize()) {
-                // 液晶扫光：低频、低强度，只为"液态"感
-                if (sweep > 0f) {
-                    Box(Modifier.matchParentSize().mioGlassSweep(sweep, 0.055f))
-                }
-                // 选中胶囊：主题色半透明玻璃 + 内高光 + 外发光（不嵌套模糊层）
+                // 选中胶囊：Miuix Backdrop 液态玻璃（API33+）/ Haze 玻璃（降级）
                 val frac = 1f / items.size
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
                         .fillMaxWidth(frac)
-                        .graphicsLayer { translationX = pos * size.width }
+                        .graphicsLayer {
+                            translationX = pos * size.width
+                            scaleX = 1f - 0.04f * pressProgress
+                            scaleY = 1f + 0.04f * pressProgress
+                        }
                         .padding(horizontal = 7.dp, vertical = 7.dp)
                         .shadow(
-                            elevation = 6.dp,
+                            elevation = 8.dp,
                             shape = RoundedCornerShape(25.dp),
                             clip = false,
-                            ambientColor = Ink.accent.copy(alpha = 0.28f),
-                            spotColor = Ink.accent.copy(alpha = 0.18f),
-                        )
-                        .clip(RoundedCornerShape(25.dp))
-                        .background(Ink.accent.copy(alpha = 0.20f))
-                        .mioGlassGloss(
-                            RoundedCornerShape(25.dp),
-                            lightAlpha = 0.30f,
-                            sheenAlpha = 0.12f,
+                            ambientColor = Ink.accent.copy(alpha = 0.30f),
+                            spotColor = Ink.accent.copy(alpha = 0.20f),
                         ),
-                )
+                ) {
+                    MioGlassSurface(
+                        modifier = Modifier.matchParentSize(),
+                        shape = RoundedCornerShape(25.dp),
+                        role = MioGlassRole.INDICATOR,
+                    ) {}
+                }
                 Row(Modifier.fillMaxSize()) {
                     items.forEachIndexed { i, item ->
                         val active = i == selectedIndex
                         val interaction = remember { MutableInteractionSource() }
                         val pressed by interaction.collectIsPressedAsState()
+                        // 记录当前按下的 tab，驱动选中胶囊的挤压形变
+                        LaunchedEffect(interaction, i, selectedIndex) {
+                            interaction.interactions.collect { event ->
+                                when (event) {
+                                    is PressInteraction.Press ->
+                                        if (i == selectedIndex) pressedTab = i
+                                    is PressInteraction.Release,
+                                    is PressInteraction.Cancel ->
+                                        if (pressedTab == i) pressedTab = -1
+                                }
+                            }
+                        }
                         val itemScale by animateFloatAsState(
                             targetValue = if (pressed) 0.92f else 1f,
                             animationSpec = tween(

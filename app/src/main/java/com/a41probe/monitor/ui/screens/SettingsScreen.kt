@@ -85,6 +85,7 @@ import com.a41probe.monitor.ui.components.rememberHaptics
 import com.a41probe.monitor.ui.glass.LocalMioChromeInsets
 import com.a41probe.monitor.ui.glass.MioGlassSheetSurface
 import com.a41probe.monitor.ui.glass.currentGlassCapability
+import com.a41probe.monitor.ui.glass.liquidEngineLabel
 import com.a41probe.monitor.ui.theme.Ink
 import com.a41probe.monitor.ui.theme.Palette
 import com.a41probe.monitor.ui.theme.Palettes
@@ -521,14 +522,14 @@ fun SettingsScreen(
                                     },
                                 )
                             }
-                            // v3.2 液态玻璃三档：完整（最通透，全表面实时模糊）/ 简约（仅外壳模糊、卡片更实更省电）/ 关闭（实色）
+                            // v3.3 液态玻璃三档：完整（最通透，Miuix Backdrop 折射）/ 简约（仅外壳玻璃、卡片更实更省电）/ 关闭（实色）
                             SegmentSetting(
                                 title = "液态玻璃",
                                 subtitle = when {
                                     cap.sdkInt >= Build.VERSION_CODES.TIRAMISU ->
-                                        "完整 = 全表面实时模糊 + 液态控件（最通透）；简约 = 仅外壳模糊、卡片更实更省电；关闭 = 实色"
+                                        "完整 = 全表面液态玻璃（实时折射 + 高光）；简约 = 仅外壳玻璃、卡片更实更省电；关闭 = 实色"
                                     cap.sdkInt >= Build.VERSION_CODES.S ->
-                                        "完整 = 全表面实时模糊（最通透）；简约 = 仅外壳模糊、卡片更实更省电；关闭 = 实色"
+                                        "完整 = 全表面实时模糊；简约 = 仅外壳模糊、卡片更实更省电；关闭 = 实色"
                                     else -> "当前系统不支持实时模糊，玻璃为半透明材质；关闭 = 实色"
                                 },
                                 labels = GLASS_LABELS,
@@ -537,6 +538,11 @@ fun SettingsScreen(
                                     glassSel = GLASS_LEVELS[idx]
                                     GlassConfig.set(ctx, GLASS_LEVELS[idx])
                                 },
+                            )
+                            // 只读自检行：一眼确认当前实际走的渲染引擎（排查"看起来不像玻璃"最有效）
+                            MioSettingRow(
+                                title = "玻璃引擎",
+                                value = liquidEngineLabel(cap),
                             )
                             SegmentSetting(
                                 title = "触感强度",

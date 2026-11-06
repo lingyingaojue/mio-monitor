@@ -13,6 +13,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.draw.innerShadow
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -23,28 +25,40 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.a41probe.monitor.ui.theme.Ink
+import com.android.purebilibili.core.ui.blur.ChromeBackdropSource
+import com.android.purebilibili.core.ui.effect.lens
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeProgressive
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.HazeColorEffect
 import dev.chrisbanes.haze.blur.hazeBlur
+import top.yukonga.miuix.kmp.blur.blur
+import top.yukonga.miuix.kmp.blur.colorControls
+import top.yukonga.miuix.kmp.blur.drawBackdrop
+import top.yukonga.miuix.kmp.blur.highlight.BloomStroke
+import top.yukonga.miuix.kmp.blur.highlight.Highlight
+import top.yukonga.miuix.kmp.blur.highlight.LightPosition
+import top.yukonga.miuix.kmp.blur.highlight.LightSource
 
 /* ============================================================
- * 玻璃表面（v3.2）：真·液态玻璃 = 低不透明度模糊 + 镜面折射边 + 高光
+ * 玻璃表面引擎（v3.3）
  *
- *  1) hazeBlur：对源层做真实背景模糊（卡片=环境光/立绘；壳层=滚动内容）；
- *  2) 单 tint：填充色 = lerp(白/深底, 主题强调色) 且 alpha 很低（dock 0.26 / 卡片 0.34），
- *     直接透出模糊内容 —— v3.1 的 0.60 填充是"看起来不是玻璃"的根因，已全部下调；
- *  3) rim：1dp 顶部高光 / 底部暗边；
- *  4) lens：1.2dp 内缩折射环（上亮→中透→下微亮），模拟玻璃厚度与边缘透镜；
- *  5) sheen / sweep：左上→右下镜面高光 +（dock）缓慢扫过的液态高光。
+ * 两条渲染路径，按能力自动选择：
  *
- * 单一 tint 还能命中 Haze 的 tint+noise 合并快通道，画质更均匀、性能更好。
- * API < 31 时 haze 不产生模糊，材质其余部分保持一致（填充稍高，仍半透明）。
+ * A) Miuix Backdrop 液态玻璃（FULL + API 33+，LocalMioChromeBackdrop != null）
+ *    —— BiliPai 同款光学链：内容背板录制 → vibrancy 增艳 → 背板模糊
+ *       → lens 边缘折射（可带色散）→ BloomStroke 边缘高光
+ *       → 玻璃底色 + 可读性 scrim → 悬浮投影 + 内阴影
+ *    用于：DOCK（底部导航）、CHROME（顶栏/整页返回条）、INDICATOR（选中胶囊）
+ *
+ * B) Haze 模糊 / 半透明降级（API 31/32、LITE、或 CARD/SHEET 角色）
+ *    —— v3.2 材质：单 tint + 低不透明度 + 折射环 + 镜面高光。
+ *    用于：卡片（采样背景层）、弹层（窗口模糊）、以及所有降级设备。
  * ============================================================ */
 
 @Composable
@@ -63,6 +77,34 @@ fun MioGlassSurface(
     val host = LocalMioGlass.current
     val capability = currentGlassCapability()
     val dark = Ink.bg.luminance() < 0.5f
+    val liquidSource = LocalMioChromeBackdrop.current
+    // 覆盖层卡片（引导页）：采样内容背板而不是背景层
+    val isOverlayCard = role == MioGlassRole.CARD && sampling == MioGlassSampling.CHROME
+    val liquidTuning = remember(role, capability, dark, progress, isOverlayCard) {
+        resolveMioLiquidTuning(
+            role = role,
+            capability = capability,
+            dark = dark,
+            progress = progress ?: 0f,
+            overlay = isOverlayCard,
+        )
+    }
+
+    // ---- A) Miuix Backdrop 液态玻璃 ----
+    if (liquidSource != null && liquidTuning.available) {
+        MioLiquidGlassSurface(
+            modifier = modifier,
+            shape = shape,
+            role = role,
+            tuning = liquidTuning,
+            source = liquidSource,
+            onClick = onClick,
+            content = content,
+        )
+        return
+    }
+
+    // ---- B) Haze 模糊 / 半透明降级（v3.2 材质）----
     val baseGeometry = remember(role, capability, dark, strength) {
         resolveGlassGeometry(role, capability, dark, strength)
     }
@@ -175,6 +217,107 @@ fun MioGlassSurface(
     Box(surface, content = content)
 }
 
+/**
+ * A) Miuix Backdrop 液态玻璃表面（API 33+）。
+ * 背板由 MainActivity 的 MioChromeContent 录制，这里只做光学合成。
+ */
+@Composable
+private fun MioLiquidGlassSurface(
+    modifier: Modifier,
+    shape: Shape,
+    role: MioGlassRole,
+    tuning: MioLiquidTuning,
+    source: ChromeBackdropSource,
+    onClick: (() -> Unit)?,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val dark = Ink.bg.luminance() < 0.5f
+    val surfaceColor = remember(tuning, dark) {
+        lerp(Ink.glassFill, Ink.glassTint, tuning.tintMix.coerceIn(0f, 1f))
+            .copy(alpha = tuning.surfaceAlpha.coerceIn(0f, 1f))
+    }
+    val scrimColor = if (dark) Color.Black else Color.White
+    // Bloom 高光只在液态分支里构造：API<33 的 Haze 降级路径不应触达 Miuix blur 类
+    val bloomStyle = remember {
+        BloomStroke(
+            color = Color.White.copy(alpha = 0.16f),
+            innerBlurRadius = 2.dp,
+            primaryLight = LightSource(
+                position = LightPosition(0.5f, -0.3f, -0.05f),
+                color = Color.White,
+                intensity = 1f,
+            ),
+            secondaryLight = LightSource(
+                position = LightPosition(0.5f, 0.8f, -0.5f),
+                color = Color.White,
+                intensity = 0.4f,
+            ),
+            dualPeak = true,
+        )
+    }
+
+    var surface = modifier
+    if (tuning.shadowRadius > 0.dp) {
+        surface = surface.dropShadow(
+            shape = shape,
+            shadow = Shadow(
+                radius = tuning.shadowRadius,
+                color = Color.Black,
+                alpha = tuning.shadowAlpha.coerceIn(0f, 1f),
+            ),
+        )
+    }
+    surface = surface.drawBackdrop(
+        backdrop = source.backdrop,
+        shape = { shape },
+        effects = {
+            // 1) 增艳：玻璃下的内容更接近"透过玻璃看"的饱和感
+            colorControls(brightness = 0f, contrast = 1f, saturation = tuning.saturation)
+            // 2) 背板模糊
+            val blurPx = tuning.blurRadius.toPx()
+            blur(blurPx, blurPx)
+            // 3) 边缘折射（含可选的色散）：液态玻璃的核心
+            if (tuning.refractionHeight > 0.dp && tuning.refractionAmount > 0.dp) {
+                lens(
+                    refractionHeight = tuning.refractionHeight.toPx(),
+                    refractionAmount = tuning.refractionAmount.toPx(),
+                    chromaticAberration = tuning.chromaticAberration,
+                )
+            }
+        },
+        highlight = {
+            Highlight(
+                width = 1.dp,
+                alpha = tuning.highlightAlpha.coerceIn(0f, 1f),
+                style = bloomStyle,
+            )
+        },
+        onDrawSurface = {
+            drawRect(surfaceColor)
+            if (tuning.scrimAlpha > 0f) {
+                drawRect(scrimColor.copy(alpha = tuning.scrimAlpha.coerceIn(0f, 1f)))
+            }
+        },
+    )
+    // 底部内阴影：玻璃厚度感（贴底的一圈暗边）
+    if (tuning.innerShadowAlpha > 0f) {
+        surface = surface.innerShadow(shape) {
+            radius = 6.dp.toPx()
+            alpha = tuning.innerShadowAlpha.coerceIn(0f, 1f)
+            color = Color.Black
+        }
+    }
+    if (onClick != null) {
+        val interaction = remember { MutableInteractionSource() }
+        surface = surface.clickable(
+            interactionSource = interaction,
+            indication = null,
+            onClick = onClick,
+        )
+    }
+    Box(surface, content = content)
+}
+
 /** 圆形玻璃（返回按钮/图标按钮）。 */
 @Composable
 fun MioGlassCircle(
@@ -209,7 +352,11 @@ fun MioGlassSheetSurface(
 }
 
 /** 把任意 Shape 转成 Path（用于沿轮廓画折射环）。 */
-private fun Shape.toOutlinePath(size: androidx.compose.ui.geometry.Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density): Path {
+private fun Shape.toOutlinePath(
+    size: androidx.compose.ui.geometry.Size,
+    layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+    density: androidx.compose.ui.unit.Density,
+): Path {
     val outline = createOutline(size, layoutDirection, density)
     return Path().apply {
         when (outline) {
@@ -221,7 +368,7 @@ private fun Shape.toOutlinePath(size: androidx.compose.ui.geometry.Size, layoutD
 }
 
 /**
- * 边缘折射环：内缩 1.2dp 的描边，上亮 → 中透 → 下微亮。
+ * 边缘折射环（Haze 降级路径用）：内缩 1.2dp 的描边，上亮 → 中透 → 下微亮。
  * 因为外层已有 clip(shape)，描边越界部分会被裁掉，效果是一条贴边的玻璃厚度线。
  */
 fun Modifier.mioGlassLensEdge(shape: Shape, alpha: Float): Modifier {
@@ -253,30 +400,6 @@ fun Modifier.mioGlassSheen(alpha: Float): Modifier {
             0.75f to Color.Transparent,
             start = Offset(0f, 0f),
             end = Offset(size.width * 0.9f, size.height * 1.1f),
-        )
-        onDrawWithContent {
-            drawContent()
-            drawRect(brush)
-        }
-    }
-}
-
-/**
- * 液态高光扫过（dock 专用）：一条柔和的斜向白色光带随进度 [progress]（0..1）扫过表面。
- * Reduce Motion 时调用方传 alpha=0 关闭。
- */
-fun Modifier.mioGlassSweep(progress: Float, alpha: Float): Modifier {
-    if (alpha <= 0.001f) return this
-    return this.drawWithCache {
-        val p = progress.coerceIn(0f, 1f)
-        val band = size.width * 0.42f
-        val cx = size.width * (p * 1.6f - 0.3f)
-        val brush = Brush.linearGradient(
-            0f to Color.Transparent,
-            0.5f to Color.White.copy(alpha = alpha),
-            1f to Color.Transparent,
-            start = Offset(cx - band, 0f),
-            end = Offset(cx + band, size.height),
         )
         onDrawWithContent {
             drawContent()
