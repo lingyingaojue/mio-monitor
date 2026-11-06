@@ -188,6 +188,16 @@ Mio 澪 是一款安卓硬件参数与性能监控应用。它把设备能够读
 # 产物：app/build/outputs/apk/debug/app-debug.apk
 ```
 
+### 源码基线
+
+本项目基线为 **Mio 官方 Releases v2.0 源码包**（tag `v2.0` / `e35dfd3`），Mio 3.x 自定义提交叠加在其上。已逐文件校验源码包与 tag 树一致（84 个文件，0 差异）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/verify-upstream-source.ps1
+```
+
+详见 [docs/UPSTREAM_SOURCE.md](docs/UPSTREAM_SOURCE.md)。
+
 ---
 
 ## 技术说明
