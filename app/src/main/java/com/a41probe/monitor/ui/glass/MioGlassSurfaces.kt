@@ -69,6 +69,11 @@ fun MioGlassSurface(
     strength: Float = 1f,
     /** 非空时按顶栏滚动进度做渐强（0=通透，1=完全雾化）；顶栏使用。 */
     progress: Float? = null,
+    /**
+     * 液态分支的滚动进度 provider：在 draw 阶段读取（Miuix DrawBackdropNode 观察 snapshot），
+     * 避免滚动时每像素重组并重建 effect 链。非液态降级路径仍走 [progress]。
+     */
+    progressProvider: (() -> Float)? = null,
     /** 覆盖角色默认的采样源（如引导页覆盖层要采样内容层而非背景层）。 */
     sampling: MioGlassSampling? = null,
     onClick: (() -> Unit)? = null,
@@ -80,24 +85,29 @@ fun MioGlassSurface(
     val liquidSource = LocalMioChromeBackdrop.current
     // 覆盖层卡片（引导页）：采样内容背板而不是背景层
     val isOverlayCard = role == MioGlassRole.CARD && sampling == MioGlassSampling.CHROME
-    val liquidTuning = remember(role, capability, dark, progress, isOverlayCard) {
-        resolveMioLiquidTuning(
-            role = role,
-            capability = capability,
-            dark = dark,
-            progress = progress ?: 0f,
-            overlay = isOverlayCard,
-        )
+    // 该角色是否处于"液态模式"（API33+ 完整档）：此时内容层没有挂 Haze 源，
+    // 不能用 chromeState 做 Haze 降级（会采空源），退回纯 tint。
+    val chromeLiquidMode = liquidSource != null && role != MioGlassRole.SHEET &&
+        (role != MioGlassRole.CARD || isOverlayCard)
+    // 液态材质两端值：CHROME 在 draw 阶段按滚动进度插值，其余角色两端相同
+    val liquidTuningFull = remember(role, capability, dark, isOverlayCard) {
+        resolveMioLiquidTuning(role, capability, dark, progress = 1f, overlay = isOverlayCard)
     }
+    val liquidTuningRest = remember(role, capability, dark, isOverlayCard) {
+        resolveMioLiquidTuning(role, capability, dark, progress = 0f, overlay = isOverlayCard)
+    }
+    // 首帧/换屏时 backdrop 尚未录制完成：先走 tint 降级，isReady 变 true 后自动重组为液态
+    val liquidReady = liquidSource?.isReady == true && liquidTuningFull.available
 
     // ---- A) Miuix Backdrop 液态玻璃 ----
-    if (liquidSource != null && liquidTuning.available) {
+    if (liquidReady) {
         MioLiquidGlassSurface(
             modifier = modifier,
             shape = shape,
-            role = role,
-            tuning = liquidTuning,
-            source = liquidSource,
+            tuning = liquidTuningFull,
+            restTuning = liquidTuningRest,
+            progressProvider = progressProvider,
+            source = liquidSource!!,
             onClick = onClick,
             content = content,
         )
@@ -105,16 +115,17 @@ fun MioGlassSurface(
     }
 
     // ---- B) Haze 模糊 / 半透明降级（v3.2 材质）----
+    val effectiveProgress = progress ?: progressProvider?.invoke()
     val baseGeometry = remember(role, capability, dark, strength) {
         resolveGlassGeometry(role, capability, dark, strength)
     }
-    val geometry = remember(baseGeometry, progress) {
-        if (progress == null) {
+    val geometry = remember(baseGeometry, effectiveProgress) {
+        if (effectiveProgress == null) {
             baseGeometry
         } else {
             baseGeometry.copy(
-                blurRadius = resolveChromeBlurRadius(baseGeometry.blurRadius, progress),
-                fillAlpha = resolveChromeFillAlpha(baseGeometry.fillAlpha, progress),
+                blurRadius = resolveChromeBlurRadius(baseGeometry.blurRadius, effectiveProgress),
+                fillAlpha = resolveChromeFillAlpha(baseGeometry.fillAlpha, effectiveProgress),
             )
         }
     }
@@ -136,7 +147,9 @@ fun MioGlassSurface(
     }
 
     val useHaze = host != null && hazeState != null &&
-        geometry.hazeSampling && capability.realtimeBlur && geometry.blurRadius > 0.dp
+        geometry.hazeSampling && capability.realtimeBlur && geometry.blurRadius > 0.dp &&
+        // 液态模式下内容层没有 Haze 源（只录了 Backdrop），壳层角色不能再采 chromeState
+        !chromeLiquidMode
 
     val style = remember(role, geometry, tintColor, dark) {
         val base = HazeBlurStyle {
@@ -220,21 +233,25 @@ fun MioGlassSurface(
 /**
  * A) Miuix Backdrop 液态玻璃表面（API 33+）。
  * 背板由 MainActivity 的 MioChromeContent 录制，这里只做光学合成。
+ *
+ * [tuning] / [restTuning] 是滚动进度两端的材质；CHROME 在 draw 阶段按
+ * [progressProvider] 插值（Miuix DrawBackdropNode 观察 snapshot 读），
+ * 避免滚动时在组合期反复重建 effect 链。
  */
 @Composable
 private fun MioLiquidGlassSurface(
     modifier: Modifier,
     shape: Shape,
-    role: MioGlassRole,
     tuning: MioLiquidTuning,
+    restTuning: MioLiquidTuning,
+    progressProvider: (() -> Float)?,
     source: ChromeBackdropSource,
     onClick: (() -> Unit)?,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val dark = Ink.bg.luminance() < 0.5f
-    val surfaceColor = remember(tuning, dark) {
+    val tintColor = remember(tuning, restTuning) {
         lerp(Ink.glassFill, Ink.glassTint, tuning.tintMix.coerceIn(0f, 1f))
-            .copy(alpha = tuning.surfaceAlpha.coerceIn(0f, 1f))
     }
     val scrimColor = if (dark) Color.Black else Color.White
     // Bloom 高光只在液态分支里构造：API<33 的 Haze 降级路径不应触达 Miuix blur 类
@@ -255,15 +272,18 @@ private fun MioLiquidGlassSurface(
             dualPeak = true,
         )
     }
+    val shadowRadius = tuning.shadowRadius
+    val shadowAlpha = tuning.shadowAlpha
+    val innerShadowAlpha = tuning.innerShadowAlpha
 
     var surface = modifier
-    if (tuning.shadowRadius > 0.dp) {
+    if (shadowRadius > 0.dp) {
         surface = surface.dropShadow(
             shape = shape,
             shadow = Shadow(
-                radius = tuning.shadowRadius,
+                radius = shadowRadius,
                 color = Color.Black,
-                alpha = tuning.shadowAlpha.coerceIn(0f, 1f),
+                alpha = shadowAlpha.coerceIn(0f, 1f),
             ),
         )
     }
@@ -271,39 +291,57 @@ private fun MioLiquidGlassSurface(
         backdrop = source.backdrop,
         shape = { shape },
         effects = {
+            val p = progressProvider?.invoke()?.coerceIn(0f, 1f) ?: 1f
             // 1) 增艳：玻璃下的内容更接近"透过玻璃看"的饱和感
-            colorControls(brightness = 0f, contrast = 1f, saturation = tuning.saturation)
-            // 2) 背板模糊
-            val blurPx = tuning.blurRadius.toPx()
+            colorControls(
+                brightness = 0f,
+                contrast = 1f,
+                saturation = lerpF(restTuning.saturation, tuning.saturation, p),
+            )
+            // 2) 背板模糊（随滚动渐强）
+            val blurPx = lerpDp(restTuning.blurRadius, tuning.blurRadius, p).toPx()
             blur(blurPx, blurPx)
             // 3) 边缘折射（含可选的色散）：液态玻璃的核心
-            if (tuning.refractionHeight > 0.dp && tuning.refractionAmount > 0.dp) {
+            val refractionHeight = lerpDp(restTuning.refractionHeight, tuning.refractionHeight, p)
+            val refractionAmount = lerpDp(restTuning.refractionAmount, tuning.refractionAmount, p)
+            if (refractionHeight > 0.dp && refractionAmount > 0.dp) {
                 lens(
-                    refractionHeight = tuning.refractionHeight.toPx(),
-                    refractionAmount = tuning.refractionAmount.toPx(),
-                    chromaticAberration = tuning.chromaticAberration,
+                    refractionHeight = refractionHeight.toPx(),
+                    refractionAmount = refractionAmount.toPx(),
+                    chromaticAberration = lerpF(
+                        restTuning.chromaticAberration,
+                        tuning.chromaticAberration,
+                        p,
+                    ),
                 )
             }
         },
         highlight = {
+            val p = progressProvider?.invoke()?.coerceIn(0f, 1f) ?: 1f
             Highlight(
                 width = 1.dp,
-                alpha = tuning.highlightAlpha.coerceIn(0f, 1f),
+                alpha = lerpF(restTuning.highlightAlpha, tuning.highlightAlpha, p).coerceIn(0f, 1f),
                 style = bloomStyle,
             )
         },
         onDrawSurface = {
-            drawRect(surfaceColor)
-            if (tuning.scrimAlpha > 0f) {
-                drawRect(scrimColor.copy(alpha = tuning.scrimAlpha.coerceIn(0f, 1f)))
+            val p = progressProvider?.invoke()?.coerceIn(0f, 1f) ?: 1f
+            drawRect(
+                tintColor.copy(
+                    alpha = lerpF(restTuning.surfaceAlpha, tuning.surfaceAlpha, p).coerceIn(0f, 1f),
+                ),
+            )
+            val scrimAlpha = lerpF(restTuning.scrimAlpha, tuning.scrimAlpha, p)
+            if (scrimAlpha > 0f) {
+                drawRect(scrimColor.copy(alpha = scrimAlpha.coerceIn(0f, 1f)))
             }
         },
     )
     // 底部内阴影：玻璃厚度感（贴底的一圈暗边）
-    if (tuning.innerShadowAlpha > 0f) {
+    if (innerShadowAlpha > 0f) {
         surface = surface.innerShadow(shape) {
             radius = 6.dp.toPx()
-            alpha = tuning.innerShadowAlpha.coerceIn(0f, 1f)
+            alpha = innerShadowAlpha.coerceIn(0f, 1f)
             color = Color.Black
         }
     }
@@ -317,6 +355,12 @@ private fun MioLiquidGlassSurface(
     }
     Box(surface, content = content)
 }
+
+private fun lerpF(start: Float, stop: Float, fraction: Float): Float =
+    start + (stop - start) * fraction
+
+private fun lerpDp(start: Dp, stop: Dp, fraction: Float): Dp =
+    (start.value + (stop.value - start.value) * fraction).dp
 
 /** 圆形玻璃（返回按钮/图标按钮）。 */
 @Composable

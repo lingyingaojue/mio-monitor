@@ -5,7 +5,8 @@ Copyright (c) 2026 A41 Probe Authors
 完整许可文本见仓库根目录 LICENSE。
 
 原因：Mio 3.0 的界面体系搬运/改编自 BiliPai 项目的 design-tokens 与 design-system
-源码（GPL-3.0），依据 GPL-3.0 的传染性，Mio 作为衍生作品整体以 GPL-3.0 分发。
+源码（GPL-3.0）；Mio 3.4 起底部导航栏直接使用 BiliPai 原版 FloatingBottomBar 及其依赖闭包
+（GPL-3.0）。依据 GPL-3.0 的传染性，Mio 作为衍生作品整体以 GPL-3.0 分发。
 被搬运文件保留了原版权与 SPDX 声明，来源与本地改动记录见 design-system/VENDORED.md。
 
 Mio 3.0 之前的历史版本（v2.0.0 及更早）仍以 MIT License 发布，原文如下：

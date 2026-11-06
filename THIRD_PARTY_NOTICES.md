@@ -7,6 +7,7 @@ Mio 3.0 使用了以下第三方开源组件。完整许可文本可通过列出
 | 组件 | 版本/来源 | 许可 | 说明 |
 |---|---|---|---|
 | BiliPai design-tokens / design-system | jay3-yy/BiliPai v0.7.8（551），2026-11 快照 | GPL-3.0 | 见 `design-system/VENDORED.md`；文件头保留原版权与 SPDX |
+| BiliPai 原版底部导航栏（FloatingBottomBar 及其依赖闭包） | jay3-yy/BiliPai v0.7.8（551），2026-11 快照 | GPL-3.0 | Mio 3.4 起直接使用 BiliPai 原版底部导航栏；文件清单/抽取/补丁见 `design-system/VENDORED.md` |
 
 ## 二进制依赖
 

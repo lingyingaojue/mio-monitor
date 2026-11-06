@@ -65,6 +65,8 @@ import com.a41probe.monitor.data.MonitorViewModel
 import com.a41probe.monitor.data.RootBridge
 import com.a41probe.monitor.data.ShizukuBridge
 import com.a41probe.monitor.data.ThermalReader
+import com.a41probe.monitor.ui.components.BottomBarStyle
+import com.a41probe.monitor.ui.components.BottomBarStyleConfig
 import com.a41probe.monitor.ui.components.DotBadge
 import com.a41probe.monitor.ui.components.GlassConfig
 import com.a41probe.monitor.ui.components.GlassLevel
@@ -115,6 +117,8 @@ import kotlinx.coroutines.withContext
 
 private val GLASS_LEVELS = listOf(GlassLevel.FULL, GlassLevel.LITE, GlassLevel.OFF)
 private val GLASS_LABELS = listOf("完整", "简约", "关闭")
+private val BOTTOM_BAR_STYLES = listOf(BottomBarStyle.BILIPAI, BottomBarStyle.MIO)
+private val BOTTOM_BAR_LABELS = listOf("BiliPai 原版", "Mio 简版")
 private val HAPTIC_LEVELS = listOf(HapticLevel.LIGHT, HapticLevel.MEDIUM, HapticLevel.HEAVY)
 private val HAPTIC_LABELS = listOf("轻", "中", "重")
 
@@ -442,7 +446,6 @@ fun SettingsScreen(
     onOpenAgent: () -> Unit = {},
     onOpenMonitor: () -> Unit = {},
     onShowOnboarding: () -> Unit = {},
-    onBack: () -> Unit = {},
 ) {
     // v0.28.0: 设置页只需权限三态 → privFlow（低频流，整页不再每秒重组）
     val snap by vm.privFlow.collectAsState()
@@ -456,12 +459,13 @@ fun SettingsScreen(
     var palSel by remember { mutableStateOf<Palette>(ThemeConfig.palette()) }
     var artwork by remember { mutableStateOf(ThemeConfig.showArtwork()) }
     var glassSel by remember { mutableStateOf(GlassConfig.current()) }
+    var barStyle by remember { mutableStateOf(BottomBarStyleConfig.current()) }
     var hapticSel by remember { mutableStateOf(MioHaptics.current()) }
     var specSel by remember { mutableStateOf<SpecialTheme>(SpecialConfig.current()) }
     val haptics = rememberHaptics()
     val animScale = rememberAnimatorScale()
 
-    MioPageScaffold(title = "设置", onBack = onBack) {
+    MioPageScaffold {
         val chrome = LocalMioChromeInsets.current
 
         Box(Modifier.fillMaxSize()) {
@@ -542,7 +546,21 @@ fun SettingsScreen(
                             // 只读自检行：一眼确认当前实际走的渲染引擎（排查"看起来不像玻璃"最有效）
                             MioSettingRow(
                                 title = "玻璃引擎",
-                                value = liquidEngineLabel(cap),
+                                value = liquidEngineLabel(
+                                    cap,
+                                    bottomBarBiliPai = barStyle == BottomBarStyle.BILIPAI,
+                                ),
+                            )
+                            // v3.4：底部导航栏实现 —— 默认直接使用 BiliPai 原版 FloatingBottomBar
+                            SegmentSetting(
+                                title = "底部导航栏",
+                                subtitle = "BiliPai 原版 = 直接使用 BiliPai 开源项目的 FloatingBottomBar（实时折射、拖动选择、重力高光；需 Android 13+）；Mio 简版 = Haze 玻璃 dock",
+                                labels = BOTTOM_BAR_LABELS,
+                                selectedIndex = BOTTOM_BAR_STYLES.indexOf(barStyle).coerceAtLeast(0),
+                                onSelect = { idx ->
+                                    barStyle = BOTTOM_BAR_STYLES[idx]
+                                    BottomBarStyleConfig.set(ctx, BOTTOM_BAR_STYLES[idx])
+                                },
                             )
                             SegmentSetting(
                                 title = "触感强度",

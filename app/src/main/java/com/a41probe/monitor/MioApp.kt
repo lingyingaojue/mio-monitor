@@ -1,6 +1,7 @@
 package com.a41probe.monitor
 
 import android.app.Application
+import com.a41probe.monitor.ui.components.BottomBarStyleConfig
 import com.a41probe.monitor.ui.components.GlassConfig
 import com.a41probe.monitor.ui.components.MioHaptics
 import com.a41probe.monitor.ui.theme.SpecialConfig
@@ -16,6 +17,8 @@ class MioApp : Application() {
         CrashCatcher.install(this)
         // v0.28.3: 玻璃档位在进程最早期加载（SharedPreferences），UI 首帧即生效
         GlassConfig.init(this)
+        // v3.4: 底部导航栏实现（BiliPai 原版 / Mio 简版），首帧即生效
+        BottomBarStyleConfig.init(this)
         // v0.28.8: 触感反馈是否可用（读系统总开关），同样在早期确定
         MioHaptics.init(this)
         // v1.1: 配色主题（同样在最早期加载，首帧即生效）

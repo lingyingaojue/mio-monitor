@@ -828,13 +828,13 @@ fun MioPageTopBar(
 }
 
 /**
- * 整页脚手架（v3.1）：内容铺满全屏（从玻璃返回条下方穿过），返回条以玻璃叠层悬浮，
- * 并通过 [LocalMioChromeInsets] 把「返回条 + 底部安全区」的占位下发给内容。
+ * 整页脚手架（v3.4）：只负责内容铺满 + 下发壳层 insets。
+ *
+ * 返回条（MioPageTopBar）已提升到 MainActivity 壳层、与内容层同级渲染——
+ * 这样它不是 Backdrop 录制子树的后代，避免 Miuix Backdrop 自引用/反馈。
  */
 @Composable
 fun MioPageScaffold(
-    title: String,
-    onBack: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -850,11 +850,6 @@ fun MioPageScaffold(
         CompositionLocalProvider(LocalMioChromeInsets provides insets) {
             content()
         }
-        MioPageTopBar(
-            title = title,
-            onBack = onBack,
-            modifier = Modifier.align(Alignment.TopCenter),
-        )
     }
 }
 

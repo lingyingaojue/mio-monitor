@@ -29,3 +29,39 @@
 
 搬运代码为 GPL-3.0；Mio 自 3.0.0 起整体按 GPL-3.0 分发（见仓库根 `LICENSE` / `NOTICE` /
 `THIRD_PARTY_NOTICES.md`）。
+## 追加搬运：BiliPai 原版底部导航栏（Mio 3.4）
+
+来源与版本同 design-system（`jay3-yy/BiliPai` v0.7.8，2026-11-04 快照）。
+目的：Mio 3.4 起底部导航栏**直接使用 BiliPai 原版 `FloatingBottomBar`**，不再自研视觉。
+落点：app 模块 `app/src/main/java/com/android/purebilibili/...`（保留原包名）。
+
+### 原样搬运（未改动逻辑）
+
+| 位置 | 文件 |
+|---|---|
+| `feature/home/components/` | `FloatingBottomBar.kt`、`FloatingBottomBarGeometry.kt`、`FloatingDockChrome.kt`、`GlassGravitySensor.kt`、`LiquidDockHapticPolicy.kt`、`LiquidGlassTuning.kt`、`LiquidGlassAdaptiveReadability.kt`、`LiquidGlassReadabilitySampling.kt`、`SideBarMotionSpec.kt` |
+| `feature/home/components/liquid/` | `CombinedBackdrop.kt`、`InnerShadow.kt`、`Lens.kt`、`StableBackdrop.kt`、`Vibrancy.kt` |
+| `feature/home/components/miuix/` | `DampedDragAnimation.kt`、`DragGestureInspector.kt`、`InteractiveHighlight.kt`、`InteractiveHighlightMotionSpec.kt`、`InteractiveHighlightPalette.kt` |
+| `core/ui/` | `DecorativeAnimationGate.kt` |
+| `core/store/` | `LiquidGlassReadabilityMode.kt` |
+
+### 抽取式搬运（只保留 BiliPai 原声明/函数体，供 vendored 文件使用）
+
+| 文件 | 来源 | 说明 |
+|---|---|---|
+| `feature/home/components/BiliPaiFloatingBottomBarGlue.kt` | 从 `BottomBar.kt`、`BottomBarLiquidSegmentedControl.kt`、`ProgressiveTopChrome.kt` 抽取 | `resolveSharedBottomBarCapsuleShape`、`resolveBottomBarDarkTheme`、`resolveSegmentedControlIndicatorHeightDp`、`BILIPAI_PROGRESSIVE_TOP_BLUR_START_FRACTION`；函数体未改 |
+| `core/store/LiquidGlassTypes.kt` | 从 `SettingsManager.kt` 抽取 | `LiquidGlassStyle/Mode/AdvancedSettings` + normalize/resolve 纯函数；避免拖入 9000+ 行设置管理 |
+| `core/util/Haptics.kt` | 从 `ModifierExt.kt` 抽取 | `HapticType` + `rememberHapticFeedback`；函数体未改 |
+
+### 本地必要补丁（与 BiliPai 原码的唯一差异）
+
+1. `core/ui/blur/UnifiedBlur.kt`：BiliPai 的 `LocalRuntimeVisualGuard`（运行时掉帧守卫）依赖 app 层
+   性能追踪链（`RuntimeVisualGuardTracker` 等未搬运），补丁为直接使用调用点传入的
+   `motionTier`/`forceLowBudget`（等价于守卫未触发）。
+2. `core/ui/blur/RecoverableVisualEffects.kt`（新增精简文件）：只保留 FloatingBottomBar 闭包用到的
+   `recoverableBlurEnabled`（固定 true，与 BiliPai 未注册 gate 时行为一致）与
+   `shouldAllowRenderEffectBackedHazeEffect`（SDK>=31，逐字保留）。
+
+### 许可
+
+以上文件均为 GPL-3.0，Mio 整体 GPL-3.0 分发（见 `LICENSE` / `NOTICE` / `THIRD_PARTY_NOTICES.md`）。

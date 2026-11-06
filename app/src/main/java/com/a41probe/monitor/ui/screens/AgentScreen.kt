@@ -71,7 +71,6 @@ import kotlinx.coroutines.delay
 @Composable
 fun AgentScreen(
     vm: MonitorViewModel,
-    onBack: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val running by AgentState.running.collectAsState()
@@ -91,7 +90,7 @@ fun AgentScreen(
 
     val listState = rememberLazyListState()
 
-    MioPageScaffold(title = "被监控模式", onBack = onBack) {
+    MioPageScaffold {
         val chrome = LocalMioChromeInsets.current
         Box(Modifier.fillMaxSize()) {
             ScrollAware(listState) {

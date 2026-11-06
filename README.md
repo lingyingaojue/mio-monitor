@@ -8,7 +8,7 @@
 
 <br/>
 
-![Version](https://img.shields.io/badge/version-v3.3-007AFF)
+![Version](https://img.shields.io/badge/version-v3.4-007AFF)
 ![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.4-7F52FF?logo=kotlin&logoColor=white)
 ![Compose](https://img.shields.io/badge/Jetpack%20Compose-Miuix-4285F4?logo=jetpackcompose&logoColor=white)
@@ -25,7 +25,7 @@
 
 Mio 澪 是一款安卓硬件参数与性能监控应用。它把设备能够读到的硬件信息，尽可能完整、准确地呈现出来：CPU 每核频率与占用、GPU 负载与频率、电池电压电流功率与健康度、几十路热区温度与散热动作、内存与传感器。
 
-**v3.3 真·液态玻璃（Miuix Backdrop）**：底栏/顶栏/返回条换成 BiliPai 同款光学链——内容背板录制 + 增艳 + 实时模糊 + **边缘折射/色散** + Bloom 高光 + 悬浮投影，选中胶囊也是玻璃镜片；Android 12 / 11 继续用 Haze 实时模糊，Android 8–11 半透明降级。**v3.2** 下调玻璃填充不透明度让内容真正透出；**v3.1** 接入 Haze 实时背景模糊。设计系统源码搬运自 BiliPai 项目（GPL-3.0，见 [design-system/VENDORED.md](design-system/VENDORED.md)）。
+**v3.4 底部导航栏直接使用 BiliPai 原版组件**：不再自研 dock 视觉，vendor BiliPai v0.7.8 的 `FloatingBottomBar` 及依赖闭包（壳体玻璃 / 液态指示器 / 拖动选择 / 重力高光 / Bloom 高光），Mio 只负责把 5 个 tab 状态映射进去；`设置 → 外观 → 底部导航栏` 可切回 Mio 简版。**v3.3** 顶栏/返回条接入 Miuix Backdrop 光学链（背板录制 + 增艳 + 实时模糊 + 边缘折射/色散 + Bloom 高光 + 悬浮投影）；**v3.2** 下调玻璃填充不透明度；**v3.1** 接入 Haze 实时背景模糊。BiliPai 源码搬运清单见 [design-system/VENDORED.md](design-system/VENDORED.md)。
 
 **v3.0 界面体系重做**：整套 UI 换成 BiliPai 的 Miuix 视觉语言——5 个主 tab 的悬浮玻璃底栏、滚动感知的玻璃顶栏、大圆角分组卡片、Miuix 设置页，并新增**浅色 / 深色 / 跟随系统**三种主题。
 
@@ -123,12 +123,12 @@ Mio 澪 是一款安卓硬件参数与性能监控应用。它把设备能够读
 - **两种主题模式**：浅色 / 深色 / 跟随系统，设置页即时切换；状态栏与导航栏图标自动跟随明暗。
 - **配色预设**：内置 6 套（晴空蓝 / 薄荷青 / 雾天青 / 暖奶米 / 浅草 / 紫藤）并各自派生深色版本，设置页即时切换。每套都按对比度取值——强调色压得住按钮文字，卡片与页面底保持可分辨的亮度差，次级文字不低于 4.5:1。
 - **角色立绘**：可在设置页开关；深色模式下自动降低不透明度并叠加页面底色渐变，避免影响卡片可读性。
-- **液态玻璃（v3.3 双引擎）**：Android 13（API 33）及以上使用 **Miuix Backdrop 液态玻璃**（BiliPai 同款：实时背板模糊 + 增艳 + 边缘折射/色散 + Bloom 高光 + 悬浮投影），Android 12 / 11 使用 Haze 实时模糊，Android 8–11 自动降级为半透明 + 高光材质，不崩溃、布局一致。
+- **液态玻璃（v3.4 双引擎）**：Android 13（API 33）及以上使用 **BiliPai 原版 FloatingBottomBar + Miuix Backdrop 液态玻璃**：底部导航栏直接复用 BiliPai 组件（实时折射 + 高光 + 拖动选择 + 重力高光），顶栏/整页返回条使用 Miuix Backdrop 光学链（背板录制 + 增艳 + 实时模糊 + 边缘折射/色散 + Bloom 高光 + 悬浮投影）；Android 12 / 11 使用 Haze 实时模糊，Android 8–11 自动降级为半透明 + 高光材质，不崩溃、布局一致。
+  - **底部导航栏 = BiliPai 原码**：`FloatingBottomBar` 及其几何/拖拽/高光/触感依赖原样搬运（清单与唯一补丁见 [design-system/VENDORED.md](design-system/VENDORED.md)），Mio 只做 tab 状态映射；可左右拖动选中、按压回弹、倾斜手机时高光移动。
   - 覆盖全场景：底部 dock、顶栏、整页返回条、全部内容卡片、设置分组、图表卡、引导页卡片、弹层（提权说明 / 明暗模式 / 添加设备）。
-  - 玻璃底下真的有内容：页面内容从顶栏/dock 下方实时穿过；dock/顶栏边缘能看到内容被**折射**（滚过时轻微弯曲），外缘有一圈 bloom 亮边与悬浮阴影；顶栏随滚动逐渐加深模糊/折射。
-  - **选中胶囊也是液态玻璃**：切换 tab 时胶囊以弹簧滑动，按下有轻微挤压形变；壳体无色散，胶囊带 0.4 色散。
+  - 玻璃底下真的有内容：页面内容从顶栏/dock 下方实时穿过并被折射；外缘有 bloom 亮边与悬浮阴影。
   - 设置页三档：**完整**（最通透，全表面液态玻璃）/ **简约**（仅外壳玻璃、卡片更实更省电）/ **关闭**（实色）。默认完整。
-  - 设置页「外观 → 玻璃引擎」会如实显示当前实际渲染路径，便于排查"为什么看起来不像玻璃"。
+  - 设置页「外观 → 玻璃引擎」如实显示当前渲染路径；「底部导航栏」可在 **BiliPai 原版 / Mio 简版** 之间切换（默认 BiliPai 原版）。
 - **导航结构**：5 个主 tab（仪表盘 / CPU / GPU / 电池 / 温度）+ 顶栏齿轮进入设置；传感器、被监控、监控与设备详情为整页二级页，带玻璃返回条。
 - **触感反馈**：底部 dock 切换、卡片与设置项按下均有震动，强度分**轻 / 中 / 重**三档；设置页提供按键，按住可持续震动、松手即停，便于直观比较。
 - **动效规范**：全局采用单一缓动曲线与统一时长（按下 130ms、松开 240ms、导航指示器 280ms、数值 320ms）。导航指示器平滑移动；卡片按下轻微收缩、阴影与明度同步下沉，抬起平滑恢复。

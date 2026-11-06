@@ -48,7 +48,6 @@ import com.a41probe.monitor.ui.theme.Ink
 @Composable
 fun RemoteDetailScreen(
     deviceKey: String,
-    onBack: () -> Unit,
 ) {
     val devices by MonitorRepository.devices.collectAsState()
     val e = devices.firstOrNull { it.key == deviceKey }
@@ -80,7 +79,7 @@ fun RemoteDetailScreen(
 
     val listState = rememberLazyListState()
 
-    MioPageScaffold(title = "设备详情", onBack = onBack) {
+    MioPageScaffold {
         val chrome = LocalMioChromeInsets.current
         Box(Modifier.fillMaxSize()) {
             ScrollAware(listState) {

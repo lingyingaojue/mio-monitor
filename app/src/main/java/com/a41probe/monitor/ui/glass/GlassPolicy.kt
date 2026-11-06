@@ -227,9 +227,9 @@ fun resolveChromeFillAlpha(baseAlpha: Float, progress: Float): Float {
 /** 顶栏视觉高度（不含状态栏）。 */
 val TopBarHeight: Dp = 58.dp
 /** 底部 dock 视觉高度。 */
-val DockHeight: Dp = 64.dp
+val DockHeight: Dp = 56.dp
 val DockTopGap: Dp = 6.dp
-val DockBottomGap: Dp = 8.dp
+val DockBottomGap: Dp = 10.dp
 /** dock 左右悬浮留白（BiliPai 式悬浮玻璃条）。 */
 val DockHorizontalInset: Dp = 12.dp
 

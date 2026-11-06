@@ -152,9 +152,17 @@ fun resolveMioLiquidTuning(
 }
 
 /** 设置页「玻璃引擎」自检文案（供用户/支持确认当前实际走的渲染路径）。 */
-fun liquidEngineLabel(capability: GlassCapability): String = when {
+fun liquidEngineLabel(
+    capability: GlassCapability,
+    bottomBarBiliPai: Boolean = liquidChromeAvailable(capability),
+): String = when {
     !capability.enabled -> "实色（玻璃已关闭）"
-    liquidChromeAvailable(capability) -> "Miuix Backdrop 液态玻璃（实时折射 + 高光）"
+    liquidChromeAvailable(capability) && bottomBarBiliPai ->
+        "BiliPai FloatingBottomBar（Miuix Backdrop）"
+    liquidChromeAvailable(capability) ->
+        "Miuix Backdrop 液态玻璃（Mio 简版底栏）"
+    capability.realtimeBlur && !capability.fullSurfaceBlur ->
+        "Haze 实时模糊（简约档：仅外壳）"
     capability.realtimeBlur -> "Haze 实时模糊（系统不支持折射）"
     else -> "半透明降级（系统不支持实时模糊）"
 }

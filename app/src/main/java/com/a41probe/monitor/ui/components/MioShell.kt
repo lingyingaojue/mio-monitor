@@ -60,6 +60,7 @@ import com.a41probe.monitor.ui.glass.DockBottomGap
 import com.a41probe.monitor.ui.glass.DockHeight
 import com.a41probe.monitor.ui.glass.DockHorizontalInset
 import com.a41probe.monitor.ui.glass.DockTopGap
+import com.a41probe.monitor.ui.glass.LocalMioChromeBackdrop
 import com.a41probe.monitor.ui.glass.LocalMioGlass
 import com.a41probe.monitor.ui.glass.MioGlassRole
 import com.a41probe.monitor.ui.glass.MioGlassSurface
@@ -88,7 +89,6 @@ fun MioTopBar(
     modifier: Modifier = Modifier,
 ) {
     val host = LocalMioGlass.current
-    val progress = host?.chromeProgress ?: 0f
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -106,7 +106,8 @@ fun MioTopBar(
         modifier = modifier.fillMaxWidth().height(statusTop + TopBarHeight),
         shape = RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp),
         role = MioGlassRole.CHROME,
-        progress = progress,
+        // 液态分支在 draw 阶段读进度，避免滚动时每个像素重组并重建 effect 链
+        progressProvider = { host?.chromeProgress ?: 0f },
     ) {
         // 状态栏区域保护：玻璃之上再压一层向下渐隐的底色，确保状态栏图标可读
         Box(
@@ -208,9 +209,11 @@ fun MioTopBar(
 }
 
 /**
- * 底部悬浮玻璃 dock（v3.2 液态玻璃）：
- * 低不透明度真模糊 + 边缘折射环 + 镜面高光 + 缓慢扫过的液态高光；
- * 内容从 dock 下方滚过并被实时模糊；选中项为玻璃胶囊 + 液态指示器滑动。
+ * 底部导航栏（v3.4）：
+ *
+ *  - API 33+ 且玻璃完整档：**直接渲染 BiliPai 原版 FloatingBottomBar**（见 MioBiliPaiBottomBar，
+ *    vendor 自 BiliPai v0.7.8：壳体玻璃 / 液态指示器 / 拖拽选择 / 重力高光全部为原码）；
+ *  - 其它情况（API<33、简约/关闭档，或用户在设置里切回 Mio 简版）：Mio 简版 Haze 玻璃 dock。
  */
 @Composable
 fun MioBottomDock(
@@ -220,6 +223,18 @@ fun MioBottomDock(
     modifier: Modifier = Modifier,
 ) {
     if (items.isEmpty()) return
+    val backdrop = LocalMioChromeBackdrop.current
+    if (backdrop != null && BottomBarStyleConfig.current() == BottomBarStyle.BILIPAI) {
+        MioBiliPaiBottomBar(
+            items = items,
+            selectedIndex = selectedIndex,
+            onSelect = onSelect,
+            modifier = modifier,
+        )
+        return
+    }
+
+    // ---- Mio 简版降级 dock（v3.2 Haze 材质）----
     val animScale = rememberAnimatorScale()
     val haptics = rememberHaptics()
     val pos by animateFloatAsState(
@@ -229,16 +244,6 @@ fun MioBottomDock(
             easing = Motion.easing,
         ),
         label = "dockIndicator",
-    )
-    // 选中胶囊的液态按压形变（按下时轻微收窄 / 拉高，像被按下去的玻璃镜片）
-    var pressedTab by remember { mutableIntStateOf(-1) }
-    val pressProgress by animateFloatAsState(
-        targetValue = if (pressedTab == selectedIndex) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = if (animScale > 0f) 140 else 0,
-            easing = Motion.easing,
-        ),
-        label = "indicatorPress",
     )
     Box(
         modifier = modifier
@@ -257,49 +262,27 @@ fun MioBottomDock(
             role = MioGlassRole.DOCK,
         ) {
             Box(Modifier.fillMaxSize()) {
-                // 选中胶囊：Miuix Backdrop 液态玻璃（API33+）/ Haze 玻璃（降级）
+                // 选中胶囊：主题色半透明玻璃 + 高光边（降级路径不再叠第二层模糊/形变）
                 val frac = 1f / items.size
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
                         .fillMaxWidth(frac)
-                        .graphicsLayer {
-                            translationX = pos * size.width
-                            scaleX = 1f - 0.04f * pressProgress
-                            scaleY = 1f + 0.04f * pressProgress
-                        }
+                        .graphicsLayer { translationX = pos * size.width }
                         .padding(horizontal = 7.dp, vertical = 7.dp)
-                        .shadow(
-                            elevation = 8.dp,
-                            shape = RoundedCornerShape(25.dp),
-                            clip = false,
-                            ambientColor = Ink.accent.copy(alpha = 0.30f),
-                            spotColor = Ink.accent.copy(alpha = 0.20f),
+                        .clip(RoundedCornerShape(25.dp))
+                        .background(Ink.accent.copy(alpha = 0.20f))
+                        .mioGlassGloss(
+                            RoundedCornerShape(25.dp),
+                            lightAlpha = 0.32f,
+                            sheenAlpha = 0.10f,
                         ),
-                ) {
-                    MioGlassSurface(
-                        modifier = Modifier.matchParentSize(),
-                        shape = RoundedCornerShape(25.dp),
-                        role = MioGlassRole.INDICATOR,
-                    ) {}
-                }
+                )
                 Row(Modifier.fillMaxSize()) {
                     items.forEachIndexed { i, item ->
                         val active = i == selectedIndex
                         val interaction = remember { MutableInteractionSource() }
                         val pressed by interaction.collectIsPressedAsState()
-                        // 记录当前按下的 tab，驱动选中胶囊的挤压形变
-                        LaunchedEffect(interaction, i, selectedIndex) {
-                            interaction.interactions.collect { event ->
-                                when (event) {
-                                    is PressInteraction.Press ->
-                                        if (i == selectedIndex) pressedTab = i
-                                    is PressInteraction.Release,
-                                    is PressInteraction.Cancel ->
-                                        if (pressedTab == i) pressedTab = -1
-                                }
-                            }
-                        }
                         val itemScale by animateFloatAsState(
                             targetValue = if (pressed) 0.92f else 1f,
                             animationSpec = tween(
@@ -326,7 +309,6 @@ fun MioBottomDock(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
                         ) {
-                            // 图标：底层偏移一层半透明黑影，保证低 alpha 玻璃上依旧清晰
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     item.icon,

@@ -73,6 +73,40 @@ object GlassConfig {
     fun effective(): GlassLevel = levelState.value
 }
 
+/** 底部导航栏实现选择（v3.4：默认直接使用 BiliPai 原版 FloatingBottomBar）。 */
+enum class BottomBarStyle { BILIPAI, MIO }
+
+/** 底部导航栏实现配置（持久化；API<33 或玻璃关闭时自动回退 Mio 简版）。 */
+object BottomBarStyleConfig {
+    private const val PREFS = "mio_glass"
+    private const val KEY_STYLE = "bottom_bar_style"
+
+    private val styleState = mutableStateOf(BottomBarStyle.BILIPAI)
+
+    fun init(ctx: Context) {
+        styleState.value = try {
+            when (ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getInt(KEY_STYLE, BottomBarStyle.BILIPAI.ordinal)) {
+                1 -> BottomBarStyle.MIO
+                else -> BottomBarStyle.BILIPAI
+            }
+        } catch (_: Exception) {
+            BottomBarStyle.BILIPAI
+        }
+    }
+
+    fun current(): BottomBarStyle = styleState.value
+
+    fun set(ctx: Context, style: BottomBarStyle) {
+        styleState.value = style
+        try {
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putInt(KEY_STYLE, style.ordinal).apply()
+        } catch (_: Exception) {
+        }
+    }
+}
+
 /* ---- 滚动上下文：各页面 LazyColumn 写入，顶栏/动画组件读取 ---- */
 
 /** 页面列表是否正在滚动（滚动中动画组件自动直切，避免掉帧） */

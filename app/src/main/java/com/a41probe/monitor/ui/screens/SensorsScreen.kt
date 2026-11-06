@@ -47,7 +47,7 @@ private fun f2(v: Float): String = ((v * 100).roundToInt() / 100.0).toString()
 data class SensorInfo(val type: Int, val name: String, val vendor: String)
 
 @Composable
-fun SensorsScreen(vm: MonitorViewModel, onBack: () -> Unit = {}) {
+fun SensorsScreen(vm: MonitorViewModel) {
     val ctx = LocalContext.current
     val live by vm.sensorsLive.collectAsState()
     val sensors = remember(ctx) { listSensors(ctx) }
@@ -60,7 +60,7 @@ fun SensorsScreen(vm: MonitorViewModel, onBack: () -> Unit = {}) {
 
     val inset = Modifier.padding(horizontal = 14.dp)
     val listState = rememberLazyListState()
-    MioPageScaffold(title = "传感器", onBack = onBack) {
+    MioPageScaffold {
         val chrome = LocalMioChromeInsets.current
         Box(Modifier.fillMaxSize()) {
     ScrollAware(listState) {

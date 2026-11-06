@@ -64,7 +64,6 @@ import com.android.purebilibili.core.ui.components.AppTextField
 @Composable
 fun MonitorScreen(
     onOpenDevice: (String) -> Unit,
-    onBack: () -> Unit,
 ) {
     val ctx = LocalContext.current
     LaunchedEffect(Unit) { MonitorRepository.start(ctx) }
@@ -75,7 +74,7 @@ fun MonitorScreen(
     var showAdd by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
-    MioPageScaffold(title = "监控端", onBack = onBack) {
+    MioPageScaffold {
         val chrome = LocalMioChromeInsets.current
         Box(Modifier.fillMaxSize()) {
             ScrollAware(listState) {

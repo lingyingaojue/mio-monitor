@@ -76,6 +76,7 @@ import com.a41probe.monitor.data.MonitorViewModel
 import com.a41probe.monitor.ui.components.MioArtBackground
 import com.a41probe.monitor.ui.components.MioBottomDock
 import com.a41probe.monitor.ui.components.MioChip
+import com.a41probe.monitor.ui.components.MioPageTopBar
 import com.a41probe.monitor.ui.components.MioTabItem
 import com.a41probe.monitor.ui.components.MioTopBar
 import com.a41probe.monitor.ui.components.OnboardingOverlay
@@ -296,23 +297,20 @@ fun MainScreen(vm: MonitorViewModel = viewModel()) {
                         Screen.GPU -> GpuScreen(vm)
                         Screen.BAT -> BatteryScreen(vm)
                         Screen.THERM -> ThermalScreen(vm)
-                        Screen.SENS -> SensorsScreen(vm, onBack = { screen = Screen.SET })
+                        Screen.SENS -> SensorsScreen(vm)
                         Screen.SET -> SettingsScreen(
                             vm,
                             onOpenSensors = { screen = Screen.SENS },
                             onOpenAgent = { screen = Screen.AGENT },
                             onOpenMonitor = { screen = Screen.MONITOR },
                             onShowOnboarding = { showOnboarding = true },
-                            onBack = { screen = backTarget(Screen.SET, settingsReturn) },
                         )
-                        Screen.AGENT -> AgentScreen(vm, onBack = { screen = Screen.SET })
+                        Screen.AGENT -> AgentScreen(vm)
                         Screen.MONITOR -> MonitorScreen(
                             onOpenDevice = { k -> remoteKey = k; screen = Screen.RDETAIL },
-                            onBack = { screen = Screen.SET },
                         )
                         Screen.RDETAIL -> RemoteDetailScreen(
                             deviceKey = remoteKey,
-                            onBack = { screen = Screen.MONITOR },
                         )
                     }
                 }
@@ -342,6 +340,14 @@ fun MainScreen(vm: MonitorViewModel = viewModel()) {
             )
         }
 
+        // 3.5) 整页玻璃返回条：**在录制子树之外**、与内容层同级渲染（v3.4 修复 Backdrop 自引用）
+        if (!isTab) {
+            MioPageTopBar(
+                title = pageTitleFor(screen),
+                onBack = { screen = backTarget(screen, settingsReturn) },
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        }
         // 4) 提权说明：玻璃弹层 + 弹窗背后内容模糊（API 31+）
         if (showShizuku) {
             ModalBottomSheet(
@@ -516,6 +522,16 @@ private fun PrivGuideRow(tag: String, name: String, desc: String) {
             maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+/** 整页返回条标题（v3.4：返回条在壳层渲染，标题由 Screen 映射）。 */
+private fun pageTitleFor(s: Screen): String = when (s) {
+    Screen.SET -> "设置"
+    Screen.SENS -> "传感器"
+    Screen.AGENT -> "被监控模式"
+    Screen.MONITOR -> "监控端"
+    Screen.RDETAIL -> "设备详情"
+    else -> ""
 }
 
 /** 当前页面 → 立绘 key（特殊预设与澪默认共用同一套 key） */
