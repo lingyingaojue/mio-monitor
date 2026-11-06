@@ -557,8 +557,8 @@ fun SettingsScreen(
                             // v3.6 全局玻璃透明度四档：只缩放玻璃填充 alpha，不改模糊/折射/可读层
                             SegmentSetting(
                                 title = "玻璃透明度",
-                                subtitle = "低 = 更实、中 = 默认（与旧版一致）、高 / 极高 = 更透；" +
-                                    "仅调整玻璃填充浓度，不影响模糊、折射与文字可读层；液态玻璃关闭时不生效",
+                                subtitle = "低 = OriginOS 高级材质参考（强模糊 + 透彩色）；中 / 高 / 极高逐级更透；" +
+                                    "只缩放玻璃填充浓度，可读层与模糊/折射不变；液态玻璃关闭时不生效",
                                 labels = GLASS_TRANSPARENCY_LABELS,
                                 selectedIndex = GLASS_TRANSPARENCY_LEVELS
                                     .indexOf(transparencySel).coerceAtLeast(0),

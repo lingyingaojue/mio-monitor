@@ -454,7 +454,7 @@ private fun GlassDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
-        containerColor = Ink.glassFill.copy(alpha = scaledGlassFillAlpha(0.94f)),
+        containerColor = Ink.glassFill.copy(alpha = scaledGlassFillAlpha(0.80f)),
         titleContentColor = Ink.tx,
         textContentColor = Ink.tx2,
         title = { Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Ink.tx) },

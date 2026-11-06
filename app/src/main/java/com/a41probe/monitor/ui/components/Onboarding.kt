@@ -129,7 +129,7 @@ fun OnboardingOverlay(pages: List<OnboardingPage>, onFinish: () -> Unit) {
                                 .fillMaxWidth()
                                 .height(206.dp)
                                 .clip(artShape)
-                                .background(Ink.glassFill.copy(alpha = scaledGlassFillAlpha(0.18f))),
+                                .background(Ink.glassFill.copy(alpha = scaledGlassFillAlpha(0.12f))),
                             contentAlignment = Alignment.Center,
                         ) {
                             // 素材缺失（角色图不随仓库分发）时跳过绘制，避免 painterResource(0) 崩溃

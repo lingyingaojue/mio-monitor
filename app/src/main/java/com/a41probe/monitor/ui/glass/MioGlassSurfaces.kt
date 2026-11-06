@@ -17,8 +17,11 @@ import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.innerShadow
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
@@ -168,9 +171,28 @@ fun MioGlassSurface(
             noiseFactor(geometry.noiseFactor)
             // 兜底底色（模糊不可用时使用；正常模糊下被源内容覆盖）
             backgroundColor(tintColor)
-            // 只放一个 tint，命中 Haze 的 tint+noise 合并快通道
+            // v3.7 OriginOS「高级材质」：先做饱和度增艳（透彩色），再叠低 alpha tint。
+            // 仅实时模糊路径启用；无模糊降级时颜色滤镜无意义。
             colorEffects(
-                listOf(HazeColorEffect.tint(tintColor.copy(alpha = geometry.fillAlpha.coerceIn(0f, 1f)))),
+                buildList {
+                    if (capability.realtimeBlur && geometry.blurRadius > 0.dp) {
+                        val vibrancy = resolveGlassVibrancy(role)
+                        if (vibrancy > 1.001f) {
+                            add(
+                                HazeColorEffect.colorFilter(
+                                    ColorFilter.colorMatrix(
+                                        ColorMatrix().apply { setToSaturation(vibrancy) },
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                    add(
+                        HazeColorEffect.tint(
+                            tintColor.copy(alpha = geometry.fillAlpha.coerceIn(0f, 1f)),
+                        ),
+                    )
+                },
             )
         }
         if (role == MioGlassRole.CHROME) {
@@ -304,8 +326,8 @@ private fun MioLiquidGlassSurface(
             val p = progressProvider?.invoke()?.coerceIn(0f, 1f) ?: 1f
             // 1) 增艳：玻璃下的内容更接近"透过玻璃看"的饱和感
             colorControls(
-                brightness = 0f,
-                contrast = 1f,
+                brightness = 0.01f,
+                contrast = 1.05f,
                 saturation = lerpF(restTuning.saturation, tuning.saturation, p),
             )
             // 2) 背板模糊（随滚动渐强）

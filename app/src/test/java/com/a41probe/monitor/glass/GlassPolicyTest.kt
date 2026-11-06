@@ -80,7 +80,7 @@ class GlassPolicyTest {
         assertTrue("卡片应有折射边", card.lensAlpha > 0f)
 
         val chrome = resolveGlassGeometry(MioGlassRole.CHROME, full33, dark = true)
-        assertTrue("顶栏模糊应大于卡片", chrome.blurRadius.value > card.blurRadius.value)
+        assertTrue("顶栏模糊应不低于卡片", chrome.blurRadius.value >= card.blurRadius.value)
 
         val tintCard = resolveGlassGeometry(MioGlassRole.CARD, tint26, dark = false)
         assertEquals(0f, tintCard.blurRadius.value, 0.001f)
@@ -101,8 +101,8 @@ class GlassPolicyTest {
         val dockLight = resolveGlassGeometry(MioGlassRole.DOCK, full31, dark = false)
         val dockDark = resolveGlassGeometry(MioGlassRole.DOCK, full31, dark = true)
         // 关键回归：dock 必须"能透"（v3.1 是 0.60/0.62 = 视觉实色）
-        assertTrue("dock 浅色填充必须明显低于 0.40，实际 ${dockLight.fillAlpha}", dockLight.fillAlpha in 0.18f..0.40f)
-        assertTrue("dock 深色填充必须明显低于 0.48，实际 ${dockDark.fillAlpha}", dockDark.fillAlpha in 0.26f..0.48f)
+        assertTrue("dock 浅色填充必须明显低于 0.40，实际 ${dockLight.fillAlpha}", dockLight.fillAlpha in 0.10f..0.30f)
+        assertTrue("dock 深色填充必须明显低于 0.48，实际 ${dockDark.fillAlpha}", dockDark.fillAlpha in 0.14f..0.36f)
         assertTrue("dock 模糊半径 >= 28dp", dockLight.blurRadius.value >= 28f)
         assertEquals(32.dp.value, dockLight.blurRadius.value, 0.001f)
         assertTrue("dock 要有主题色 tint", dockLight.tintMix > 0.02f)

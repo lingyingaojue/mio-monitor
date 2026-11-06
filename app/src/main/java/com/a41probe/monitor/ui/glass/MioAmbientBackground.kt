@@ -35,9 +35,9 @@ fun MioAmbientBackground(
     val accent2 = Ink.accent2
     val cool = Ink.clusterPerf
     // v3.2：色团更艳、更大，尤其底部一团（dock 区域）——保证不滚动时玻璃下也有颜色可透
-    val a1 = if (dark) 0.24f else 0.20f
-    val a2 = if (dark) 0.18f else 0.16f
-    val a3 = if (dark) 0.22f else 0.20f
+    val a1 = if (dark) 0.30f else 0.26f
+    val a2 = if (dark) 0.24f else 0.22f
+    val a3 = if (dark) 0.30f else 0.28f
     Box(
         modifier = modifier
             .fillMaxSize()

@@ -397,7 +397,7 @@ private fun AddDeviceDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = dialogShape,
-        containerColor = Ink.glassFill.copy(alpha = scaledGlassFillAlpha(0.82f)),
+        containerColor = Ink.glassFill.copy(alpha = scaledGlassFillAlpha(0.68f)),
         titleContentColor = Ink.tx,
         textContentColor = Ink.tx2,
         title = {

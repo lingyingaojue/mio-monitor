@@ -10,7 +10,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.a41probe.monitor.ui.glass.LocalMioChromeBackdrop
-import com.a41probe.monitor.ui.glass.scaleGlassAlpha
 import com.a41probe.monitor.ui.theme.Ink
 import com.android.purebilibili.feature.home.components.FloatingBottomBar
 import com.android.purebilibili.feature.home.components.FloatingBottomBarColors
@@ -88,6 +87,18 @@ internal fun scaleBottomBarTuning(
     tuning: LiquidGlassTuning,
     level: GlassTransparency,
 ): LiquidGlassTuning = tuning.copy(
-    surfaceAlpha = scaleGlassAlpha(tuning.surfaceAlpha, level, floor = 0.10f, ceiling = 0.85f),
-    whiteOverlayAlpha = scaleGlassAlpha(tuning.whiteOverlayAlpha, level, floor = 0f, ceiling = 0.50f),
+    // v3.7：BiliPai dock 用绝对目标值，低档已是 OriginOS 高级材质观感；
+    // scrim / 指示器 tint 保持 vendored 值，保证文字与选中态可读。
+    surfaceAlpha = when (level) {
+        GlassTransparency.LOW -> 0.34f
+        GlassTransparency.MEDIUM -> 0.26f
+        GlassTransparency.HIGH -> 0.20f
+        GlassTransparency.ULTRA -> 0.14f
+    },
+    whiteOverlayAlpha = when (level) {
+        GlassTransparency.LOW -> 0.03f
+        GlassTransparency.MEDIUM -> 0.02f
+        GlassTransparency.HIGH -> 0.015f
+        GlassTransparency.ULTRA -> 0.01f
+    },
 )

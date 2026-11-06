@@ -5,30 +5,44 @@ import com.a41probe.monitor.ui.components.GlassTransparency
 import com.a41probe.monitor.ui.components.GlassTransparencyConfig
 
 /* ============================================================
- * Mio 3.6 全局玻璃透明度策略（纯逻辑，可 JVM 单测）
+ * Mio 3.7 全局玻璃透明度策略（OriginOS「高级材质」对齐）
  *
- * 只缩放"玻璃填充不透明度"，模糊半径、边缘折射/色散、Bloom 高光、
- * 悬浮投影、内阴影、可读性 scrim 全部保持不变——透明度是材质浓度，
- * 不是把玻璃关掉，因此不牺牲文字对比。
+ * 材质语言：强实时模糊 + 透彩色（背景颜色透上来）+ 很低的填充 tint
+ * + 细腻边缘高光；透明度档位只缩放"填充不透明度"。
  *
- * 档位：低(更实) / 中(默认，= 3.5 外观) / 高 / 极高。
+ * 四档以「低」为 OriginOS 参考档（1.0），中/高/极高逐级更透；
+ * 模糊半径、边缘折射/色散、Bloom 高光、悬浮投影、内阴影、
+ * 可读性 scrim 全部保持不变——透明度是材质浓度，不牺牲文字对比。
  * ============================================================ */
 
-/** 透明度档位的 alpha 倍率：越高越透（alpha 越低）。中档为 1.0，保证升级零视觉变化。 */
+/** 透明度档位的 alpha 倍率：低=OriginOS 参考档，中/高/极高逐级更透。 */
 fun glassTransparencyFactor(level: GlassTransparency): Float = when (level) {
-    GlassTransparency.LOW -> 1.35f
-    GlassTransparency.MEDIUM -> 1.00f
-    GlassTransparency.HIGH -> 0.70f
-    GlassTransparency.ULTRA -> 0.45f
+    GlassTransparency.LOW -> 1.00f
+    GlassTransparency.MEDIUM -> 0.80f
+    GlassTransparency.HIGH -> 0.58f
+    GlassTransparency.ULTRA -> 0.38f
 }
 
 /** 把基础 alpha 按档位缩放并夹在安全区间，避免完全透明或超出 1。 */
 fun scaleGlassAlpha(
     base: Float,
     level: GlassTransparency,
-    floor: Float = 0.06f,
+    floor: Float = 0.035f,
     ceiling: Float = 0.92f,
 ): Float = (base * glassTransparencyFactor(level)).coerceIn(floor, ceiling)
+
+/**
+ * 各玻璃角色的"透彩色"增艳强度（Haze ColorMatrix 饱和度）。
+ * 这是 OriginOS 高级材质与普通磨砂的核心差异：模糊后的背景颜色更艳、更透。
+ * SHEET 保持克制，保证弹层文字可读。
+ */
+fun resolveGlassVibrancy(role: MioGlassRole): Float = when (role) {
+    MioGlassRole.CARD -> 1.45f
+    MioGlassRole.CHROME -> 1.35f
+    MioGlassRole.DOCK -> 1.40f
+    MioGlassRole.INDICATOR -> 1.40f
+    MioGlassRole.SHEET -> 1.15f
+}
 
 /** 液态（Miuix Backdrop）材质：只改 surfaceAlpha，scrimAlpha 保持可读性不变。 */
 fun applyMioLiquidTransparency(
@@ -37,7 +51,7 @@ fun applyMioLiquidTransparency(
 ): MioLiquidTuning {
     if (!tuning.available) return tuning
     return tuning.copy(
-        surfaceAlpha = scaleGlassAlpha(tuning.surfaceAlpha, level, floor = 0.05f, ceiling = 0.85f),
+        surfaceAlpha = scaleGlassAlpha(tuning.surfaceAlpha, level, floor = 0.035f, ceiling = 0.85f),
     )
 }
 
@@ -49,7 +63,7 @@ fun applyGlassGeometryTransparency(
 ): MioGlassGeometry {
     if (!enabled) return geometry
     return geometry.copy(
-        fillAlpha = scaleGlassAlpha(geometry.fillAlpha, level, floor = 0.06f, ceiling = 0.90f),
+        fillAlpha = scaleGlassAlpha(geometry.fillAlpha, level, floor = 0.035f, ceiling = 0.90f),
     )
 }
 
@@ -60,6 +74,6 @@ fun applyGlassGeometryTransparency(
 @Composable
 fun scaledGlassFillAlpha(
     base: Float,
-    floor: Float = 0.04f,
+    floor: Float = 0.035f,
     ceiling: Float = 0.96f,
 ): Float = scaleGlassAlpha(base, GlassTransparencyConfig.current(), floor, ceiling)

@@ -126,65 +126,65 @@ fun resolveGlassGeometry(
 
     return when (role) {
         MioGlassRole.CARD -> MioGlassGeometry(
-            blurRadius = if (capability.realtimeBlur && capability.fullSurfaceBlur) 24.dp else 0.dp,
-            fillAlpha = ((if (dark) 0.42f else 0.34f) * (0.92f + 0.08f * k) +
+            blurRadius = if (capability.realtimeBlur && capability.fullSurfaceBlur) 32.dp else 0.dp,
+            fillAlpha = ((if (dark) 0.18f else 0.14f) * (0.92f + 0.08f * k) +
                 noBlurBoost + liteBoost).coerceAtMost(0.92f),
-            tintMix = 0.03f * k,
-            noiseFactor = 0.028f,
-            shadowElevation = 8.dp,
-            shadowAlpha = if (dark) 0.40f else 0.14f,
-            rimLightAlpha = (if (dark) 0.26f else 0.45f) * k,
-            sheenAlpha = (if (dark) 0.06f else 0.12f) * k,
-            lensAlpha = (if (dark) 0.22f else 0.18f) * k,
+            tintMix = 0.02f * k,
+            noiseFactor = 0.018f,
+            shadowElevation = 10.dp,
+            shadowAlpha = if (dark) 0.34f else 0.16f,
+            rimLightAlpha = (if (dark) 0.32f else 0.55f) * k,
+            sheenAlpha = (if (dark) 0.08f else 0.16f) * k,
+            lensAlpha = (if (dark) 0.28f else 0.24f) * k,
             specularAlpha = 0f,
             hazeSampling = true,
         )
 
         MioGlassRole.CHROME -> MioGlassGeometry(
             blurRadius = if (capability.realtimeBlur) 32.dp else 0.dp,
-            fillAlpha = (if (dark) 0.40f else 0.36f) + noBlurBoost,
+            fillAlpha = (if (dark) 0.30f else 0.24f) + noBlurBoost,
             tintMix = 0.05f,
             noiseFactor = 0.022f,
             shadowElevation = 10.dp,
             shadowAlpha = if (dark) 0.45f else 0.16f,
-            rimLightAlpha = if (dark) 0.28f else 0.55f,
-            sheenAlpha = if (dark) 0.06f else 0.14f,
-            lensAlpha = if (dark) 0.26f else 0.22f,
+            rimLightAlpha = if (dark) 0.34f else 0.62f,
+            sheenAlpha = if (dark) 0.08f else 0.16f,
+            lensAlpha = if (dark) 0.30f else 0.26f,
             specularAlpha = 0f,
             hazeSampling = true,
         )
 
         MioGlassRole.DOCK -> MioGlassGeometry(
             blurRadius = if (capability.realtimeBlur) 32.dp else 0.dp,
-            fillAlpha = ((if (dark) 0.34f else 0.26f) + noBlurBoost).coerceAtMost(0.72f),
+            fillAlpha = ((if (dark) 0.22f else 0.16f) + noBlurBoost).coerceAtMost(0.72f),
             tintMix = if (dark) 0.08f else 0.06f,
             noiseFactor = 0.018f,
             shadowElevation = 20.dp,
             shadowAlpha = if (dark) 0.50f else 0.18f,
-            rimLightAlpha = if (dark) 0.34f else 0.55f,
-            sheenAlpha = if (dark) 0.08f else 0.18f,
-            lensAlpha = if (dark) 0.34f else 0.30f,
+            rimLightAlpha = if (dark) 0.36f else 0.60f,
+            sheenAlpha = if (dark) 0.10f else 0.20f,
+            lensAlpha = if (dark) 0.36f else 0.34f,
             specularAlpha = 0.07f,
             hazeSampling = true,
         )
 
         MioGlassRole.INDICATOR -> MioGlassGeometry(
             blurRadius = if (capability.realtimeBlur) 14.dp else 0.dp,
-            fillAlpha = (if (dark) 0.24f else 0.20f) * k,
+            fillAlpha = (if (dark) 0.18f else 0.14f) * k,
             tintMix = 1f, // 胶囊用强调色本身
             noiseFactor = 0.016f,
             shadowElevation = 0.dp,
             shadowAlpha = 0f,
-            rimLightAlpha = (if (dark) 0.26f else 0.55f) * k,
-            sheenAlpha = (if (dark) 0.10f else 0.22f) * k,
-            lensAlpha = (if (dark) 0.24f else 0.20f) * k,
+            rimLightAlpha = (if (dark) 0.28f else 0.58f) * k,
+            sheenAlpha = (if (dark) 0.12f else 0.24f) * k,
+            lensAlpha = (if (dark) 0.28f else 0.24f) * k,
             specularAlpha = 0f,
             hazeSampling = true,
         )
 
         MioGlassRole.SHEET -> MioGlassGeometry(
             blurRadius = 0.dp, // 弹层在独立窗口：模糊由 ModalWindowBlurBehindEffect 提供
-            fillAlpha = (if (dark) 0.68f else 0.62f) + noBlurBoost * 0.5f,
+            fillAlpha = (if (dark) 0.64f else 0.58f) + noBlurBoost * 0.5f,
             tintMix = 0.035f,
             noiseFactor = 0.02f,
             shadowElevation = 0.dp,
@@ -195,8 +195,7 @@ fun resolveGlassGeometry(
             specularAlpha = 0f,
             hazeSampling = false,
         )
-    }
-}
+    }}
 
 /** 用户关闭/简约档位下，卡片是否仍保留模糊。 */
 fun cardBlurEnabled(level: GlassLevel, capability: GlassCapability): Boolean =

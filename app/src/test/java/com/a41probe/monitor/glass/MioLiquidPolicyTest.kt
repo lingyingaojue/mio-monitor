@@ -62,7 +62,7 @@ class MioLiquidPolicyTest {
         val scrolled = resolveMioLiquidTuning(MioGlassRole.CHROME, full35, dark = false, progress = 1f)
 
         assertTrue("滚到顶应接近通透", atTop.surfaceAlpha <= 0.10f)
-        assertTrue("滚动后要有遮挡力", scrolled.surfaceAlpha >= 0.30f)
+        assertTrue("滚动后要有遮挡力", scrolled.surfaceAlpha >= 0.20f)
         assertTrue("滚动后模糊更强", scrolled.blurRadius > atTop.blurRadius)
         assertTrue("滚动后折射更强", scrolled.refractionAmount > atTop.refractionAmount)
         assertTrue("滚动后高光更强", scrolled.highlightAlpha > atTop.highlightAlpha)
@@ -91,7 +91,7 @@ class MioLiquidPolicyTest {
             MioGlassRole.CARD, full35, dark = false, overlay = true,
         )
         assertTrue(overlay.available)
-        assertTrue(overlay.surfaceAlpha in 0.20f..0.45f)
+        assertTrue(overlay.surfaceAlpha in 0.10f..0.28f)
         // 不可用设备的任何角色都返回 Unavailable
         val api31 = cap(GlassLevel.FULL, 31)
         assertFalse(resolveMioLiquidTuning(MioGlassRole.DOCK, api31, dark = false).available)
