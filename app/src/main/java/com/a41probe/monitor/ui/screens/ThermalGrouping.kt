@@ -1,7 +1,27 @@
 package com.a41probe.monitor.ui.screens
 
+import com.a41probe.monitor.data.CoolingDev
+import com.a41probe.monitor.data.HalTemp
 import com.a41probe.monitor.data.ThermalTrip
 import com.a41probe.monitor.data.ThermalZone
+
+/**
+ * v3.13：可读性判定——读不到/无意义的温度不进入任何列表。
+ * 0°C 及以下是未使能/哨兵/缺传感器；NaN/null/超物理范围同理。
+ */
+internal fun isReadableTemp(tempC: Double?): Boolean =
+    tempC != null && tempC > 0.0 && tempC <= 150.0
+
+internal fun isReadableZone(zone: ThermalZone): Boolean = isReadableTemp(zone.tempC)
+
+/** 冷却设备：cur/max 都读到才显示；cur=0 是有效“未触发”，不隐藏。 */
+internal fun isReadableCooling(dev: CoolingDev): Boolean =
+    dev.cur != null && dev.max != null && dev.max > 0
+
+internal fun isReadableHal(h: HalTemp): Boolean = isReadableTemp(h.tempC)
+
+internal fun readableZones(all: List<ThermalZone>): List<ThermalZone> =
+    all.filter(::isReadableZone)
 
 /**
  * v3.12：温度页分组（纯函数，可单测）。
@@ -23,10 +43,11 @@ private val BOARD_PREFIXES = listOf(
 )
 
 internal fun groupThermalZones(all: List<ThermalZone>): List<ThermalZoneGroup> {
-    if (all.isEmpty()) return emptyList()
-    val used = HashSet<Int>(all.size)
+    val readable = readableZones(all)
+    if (readable.isEmpty()) return emptyList()
+    val used = HashSet<Int>(readable.size)
     fun take(title: String, match: (String) -> Boolean): ThermalZoneGroup? {
-        val zones = all.filter { it.id !in used && match(it.name) }
+        val zones = readable.filter { it.id !in used && match(it.name) }
         if (zones.isEmpty()) return null
         used.addAll(zones.map { it.id })
         return ThermalZoneGroup(title, sortZones(zones))

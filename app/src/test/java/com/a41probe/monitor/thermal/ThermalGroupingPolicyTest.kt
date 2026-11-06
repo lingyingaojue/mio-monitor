@@ -75,7 +75,7 @@ class ThermalGroupingPolicyTest {
     }
 
     @Test
-    fun sortingPutsValidTemperaturesFirst() {
+    fun unreadableZonesAreFilteredBeforeGrouping() {
         val zones = listOf(
             zone(0, "cpu-a", null),
             zone(1, "cpu-b", -5.0),
@@ -83,6 +83,6 @@ class ThermalGroupingPolicyTest {
             zone(3, "cpu-d", 40.0),
         )
         val sorted = groupThermalZones(zones).first { it.title == "CPU" }.zones
-        assertEquals(listOf("cpu-c", "cpu-d", "cpu-a", "cpu-b"), sorted.map { it.name })
+        assertEquals(listOf("cpu-c", "cpu-d"), sorted.map { it.name })
     }
 }

@@ -110,25 +110,6 @@ private fun headColor(frac: Float): Color = when {
     else -> Ink.ok
 }
 
-/** cooling type → 人话（v3.12：全量 64 项，覆盖本机 cpufreq-hotplug/pause/thermal-pause 等） */
-private fun coolingZh(type: String): String = when {
-    type.startsWith("cpufreq-cpu") -> "CPU ${type.removePrefix("cpufreq-cpu")} 限频"
-    type.startsWith("cpu-hotplug") -> "CPU ${type.removePrefix("cpu-hotplug")} 热插拔"
-    type.startsWith("pause-cpu") -> "暂停 CPU ${type.removePrefix("pause-cpu")}"
-    type.startsWith("thermal-pause-") -> "热暂停 ${type.removePrefix("thermal-pause-")}"
-    type.startsWith("cpu-cluster") -> "CPU 簇 ${type.removePrefix("cpu-cluster")} 限频"
-    type == "gpu" || type == "kgsl" || type == "gpu-dump-skip-cdev" -> "GPU 限频"
-    type == "ddr-cdev" -> "DDR 降速"
-    type == "display-fps" -> "屏幕降帧"
-    type == "panel0-backlight" -> "屏幕降亮"
-    type == "ufs" -> "存储限速"
-    type == "battery" -> "充电限流"
-    type == "cdsp_hw" -> "NPU 限频"
-    type == "cdsp" -> "DSP 限频"
-    type == "wlan" -> "网络限速"
-    else -> type
-}
-
 private fun coolingColor(r: Float): Color = when {
     r >= 0.67f -> Ink.danger
     r >= 0.34f -> Ink.warn
@@ -163,11 +144,17 @@ fun ThermalScreen(vm: MonitorViewModel) {
     val status by vm.thermalStatusFlow.collectAsState()
     val thresholds by vm.thresholdsFlow.collectAsState()
 
+    // v3.13: 读不到数据的项不进入任何列表/计数
+    val readable = remember(all) { readableZones(all) }
+    val coolingReadable = remember(cooling) { cooling.filter(::isReadableCooling) }
+    val halReadable = remember(halTemps) { halTemps.filter(::isReadableHal) }
+
     // v3.1 液态玻璃：内容从玻璃顶栏/dock 下方穿过，LazyColumn 用壳层 insets 避让首末项
     val chrome = LocalMioChromeInsets.current
 
-    val avg = all.mapNotNull { it.tempC }.filter { it > 0 }
-        .let { if (it.isEmpty()) null else it.sum() / it.size }
+    val avg = readable.mapNotNull { it.tempC }.let {
+        if (it.isEmpty()) null else it.sum() / it.size
+    }
 
     val inset = Modifier.padding(horizontal = PageHPad)
     val listState = rememberLazyListState()
@@ -181,7 +168,7 @@ fun ThermalScreen(vm: MonitorViewModel) {
             item {
                 MioPageHeader(
                     "温度",
-                    if (all.isEmpty()) "结温 · 外壳 · 待授权" else "结温 · 外壳 · ${all.size} 区热区",
+                    if (readable.isEmpty()) "结温 · 外壳 · 待授权" else "结温 · 外壳 · ${readable.size} 区有效",
                 )
             }
 
@@ -244,25 +231,25 @@ fun ThermalScreen(vm: MonitorViewModel) {
                             }
                         }
                         Spacer(Modifier.height(10.dp))
-                        // 外壳侧温度：只取背板热敏电阻 skin*（真实外壳温度）。
+                        // 外壳侧温度：只取背板热敏电阻 skin*（真实外壳温度）。v3.13: 读不到整行隐藏
                         // tof-therm 是相机 ToF 传感器、非外壳温度且读数恒定 46.9℃ 异常
                         val shellZones = all.filter { z ->
                             z.tempC != null && z.tempC > 0 && z.name.startsWith("skin")
                         }
                         val shellMax = shellZones.maxByOrNull { it.tempC!! }
-                        MioInfoRow("外壳侧", f1(shellMax?.tempC), if (shellMax != null) "°C" else "")
                         if (shellMax != null) {
+                            MioInfoRow("外壳侧", f1(shellMax.tempC), "°C")
                             Text(
                                 shellMax.name, color = Ink.off, fontSize = 9.5.sp, maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "背板热敏电阻(skin) · 手感参考，握持面热惯性偏热，背板通常低于结温 15~25°C",
+                                color = Ink.off, fontSize = 10.sp, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "背板热敏电阻(skin) · 手感参考，握持面热惯性偏热，背板通常低于结温 15~25°C",
-                            color = Ink.off, fontSize = 10.sp, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
                     }
                 }
             }
@@ -275,7 +262,7 @@ fun ThermalScreen(vm: MonitorViewModel) {
                         CardHead("距温度红线") {
                             PrivChip(priv.rootAvailable)
                             Spacer(Modifier.width(8.dp))
-                            Text("Thermal HAL", color = Ink.off, fontSize = 10.5.sp)
+                            Text("官方热模块", color = Ink.off, fontSize = 10.5.sp)
                         }
                         Spacer(Modifier.height(6.dp))
                         rows.forEach { r ->
@@ -350,26 +337,28 @@ fun ThermalScreen(vm: MonitorViewModel) {
             }
 
             // ④ 分组热区：CPU/GPU 等每组默认 Top-5，可展开看全部（含 HAL 官方温度）
-            item { ZoneGroupSections(all, halTemps, priv.rootAvailable) }
+            if (readable.isNotEmpty()) {
+                item { ZoneGroupSections(readable, halReadable, priv.rootAvailable) }
+            }
 
-            // ⑤ 全部热区网格（数量随设备变化，不再固定 84）
-            item {
+            // ⑤ 全部热区网格（只显示可读温度；无数据整卡隐藏）
+            if (readable.isNotEmpty()) item {
                 MioCard(inset) {
-                    CardHead(if (all.isEmpty()) "全部热区" else "全部 ${all.size} 区") {
+                    CardHead("全部 ${readable.size} 区") {
                         PrivChip(priv.rootAvailable)
                     }
                     Spacer(Modifier.height(8.dp))
-                    AllZonesGrid(all)
+                    AllZonesGrid(readable)
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        if (all.isEmpty()) "App 域无权限 · 需 Shizuku" else "20–50°C 归一化",
+                        "只显示可读温度 · 20–50°C 归一化",
                         color = Ink.off, fontSize = 10.sp,
                     )
                 }
             }
             item {
                 Text(
-                    "≥42°C 红 · ≥36°C 橙 · 其余绿 · 灰格=未启用传感器",
+                    "≥42°C 红 · ≥36°C 橙 · 其余绿",
                     color = Ink.off, fontSize = 10.5.sp,
                     modifier = Modifier.padding(horizontal = PageHPad + 4.dp),
                 )
@@ -435,10 +424,10 @@ private fun ZoneGroupCard(
         }
         if (expanded && official.isNotEmpty()) {
             Spacer(Modifier.height(6.dp))
-            Text("HAL 官方 · ${official.size} 项", color = Ink.off, fontSize = 10.sp)
+            Text(halSectionTitle(official.size), color = Ink.off, fontSize = 10.sp)
             official.sortedByDescending { it.tempC ?: Double.MIN_VALUE }.forEach { h ->
                 MioBarRow(
-                    name = "HAL·${h.name}",
+                    name = halTempLabel(h.name),
                     frac = tempFrac(h.tempC),
                     value = "${f1(h.tempC)}°",
                     barColor = tempColor(h.tempC),
@@ -468,26 +457,6 @@ private fun zoneRowValue(z: ThermalZone, expanded: Boolean): String {
     val base = "${f1(z.tempC)}°"
     if (!expanded) return base
     return tripThresholdLabel(z)?.let { "$base / $it" } ?: base
-}
-
-/** UX(M10): sysfs 热区代号 → 人话前缀 + 编号（cpuss-0-0 → "CPU 0-0"，原名语义保留） */
-private fun zoneNameZh(raw: String): String {
-    val (zh, rest) = when {
-        raw.startsWith("cpuss") -> "CPU" to raw.removePrefix("cpuss")
-        raw.startsWith("cpu") -> "CPU" to raw.removePrefix("cpu")   // cpu-1-5 单核热点
-        raw.startsWith("gpuss") -> "GPU" to raw.removePrefix("gpuss")
-        raw.startsWith("nsp") -> "NPU" to raw.removePrefix("nsp")
-        raw.startsWith("ddr") -> "内存" to raw.removePrefix("ddr")
-        raw.startsWith("video") -> "多媒体" to raw.removePrefix("video")
-        raw.startsWith("battery") -> "电池" to raw.removePrefix("battery")
-        raw.startsWith("skin") -> "外壳" to raw.removePrefix("skin")
-        raw.startsWith("usb") -> "充电" to raw.removePrefix("usb")
-        raw.startsWith("tof") -> "ToF" to raw.removePrefix("tof")
-        raw.startsWith("pm8350") -> "电源" to raw.removePrefix("pm8350")
-        raw.startsWith("pa") -> "射频" to raw.removePrefix("pa")
-        else -> return raw
-    }
-    return zh + rest.replaceFirst("-", " ").replace("_", " ")
 }
 
 @Composable
