@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.a41probe.monitor.data.CoolingDev
+import com.a41probe.monitor.data.HalTemp
 import com.a41probe.monitor.data.MonitorViewModel
 import com.a41probe.monitor.data.ThermalZone
 import com.a41probe.monitor.ui.components.MioBarRow
@@ -109,21 +110,22 @@ private fun headColor(frac: Float): Color = when {
     else -> Ink.ok
 }
 
-/** cooling type → 人话 */
-private fun coolingZh(type: String): String = when (type) {
-    "thermal-cpufreq-0" -> "小核限频"
-    "thermal-cpufreq-1" -> "中核限频"
-    "thermal-cpufreq-2" -> "大核限频"
-    "gpu" -> "GPU 限频"
-    "thermal-devfreq-0" -> "总线限频"
-    "ddr-cdev" -> "DDR 降速"
-    "display-fps" -> "屏幕降帧"
-    "panel0-backlight" -> "屏幕降亮"
-    "ufs" -> "存储限速"
-    "battery" -> "充电限流"
-    "cdsp_hw" -> "NPU 限频"
-    "cdsp" -> "DSP 限频"
-    "wlan" -> "网络限速"
+/** cooling type → 人话（v3.12：全量 64 项，覆盖本机 cpufreq-hotplug/pause/thermal-pause 等） */
+private fun coolingZh(type: String): String = when {
+    type.startsWith("cpufreq-cpu") -> "CPU ${type.removePrefix("cpufreq-cpu")} 限频"
+    type.startsWith("cpu-hotplug") -> "CPU ${type.removePrefix("cpu-hotplug")} 热插拔"
+    type.startsWith("pause-cpu") -> "暂停 CPU ${type.removePrefix("pause-cpu")}"
+    type.startsWith("thermal-pause-") -> "热暂停 ${type.removePrefix("thermal-pause-")}"
+    type.startsWith("cpu-cluster") -> "CPU 簇 ${type.removePrefix("cpu-cluster")} 限频"
+    type == "gpu" || type == "kgsl" || type == "gpu-dump-skip-cdev" -> "GPU 限频"
+    type == "ddr-cdev" -> "DDR 降速"
+    type == "display-fps" -> "屏幕降帧"
+    type == "panel0-backlight" -> "屏幕降亮"
+    type == "ufs" -> "存储限速"
+    type == "battery" -> "充电限流"
+    type == "cdsp_hw" -> "NPU 限频"
+    type == "cdsp" -> "DSP 限频"
+    type == "wlan" -> "网络限速"
     else -> type
 }
 
@@ -149,7 +151,7 @@ private fun ThermalStatusBadge(status: Int?) {
     MioChip(text = "热状态·${pair.first}", color = pair.second)
 }
 
-/** 热力：电池温度 hero / 最高·均值 / 距红线 / 缓解动作 / 分组热区 + 84 网格 */
+/** 热力：电池温度 hero / 最高·均值 / 距红线 / 缓解动作 / 分组热区 + 全部热区网格 */
 @Composable
 fun ThermalScreen(vm: MonitorViewModel) {
     // v0.28.0: 细粒度订阅——热区/冷却/HAL/权限/电池各自独立流
@@ -176,7 +178,12 @@ fun ThermalScreen(vm: MonitorViewModel) {
             contentPadding = PaddingValues(top = 2.dp + chrome.top, bottom = 20.dp + chrome.bottom),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { MioPageHeader("温度", "结温 · 外壳 · 84 区热区") }
+            item {
+                MioPageHeader(
+                    "温度",
+                    if (all.isEmpty()) "结温 · 外壳 · 待授权" else "结温 · 外壳 · ${all.size} 区热区",
+                )
+            }
 
             // ① 概览：无权限时电池温度 hero 打底，不用整页空白引导
             item {
@@ -194,7 +201,7 @@ fun ThermalScreen(vm: MonitorViewModel) {
                         Spacer(Modifier.height(12.dp))
                         MioDivider()
                         Spacer(Modifier.height(12.dp))
-                        CardHead("84 区热区") { PrivChip(priv.rootAvailable) }
+                        CardHead("全部热区") { PrivChip(priv.rootAvailable) }
                         Spacer(Modifier.height(4.dp))
                         Text(
                             "未解锁", color = Ink.off, fontSize = 22.sp,
@@ -206,7 +213,7 @@ fun ThermalScreen(vm: MonitorViewModel) {
                         )
                         Spacer(Modifier.height(10.dp))
                         Text(
-                            "授权后解锁全部 84 个温度区（结温/外壳/射频等）· 设置页一键发起",
+                            "授权后读取全部热区（结温/外壳/射频等，数量随机型）· 设置页一键发起",
                             color = Ink.tx2, fontSize = 11.sp,
                         )
                     } else {
@@ -331,7 +338,7 @@ fun ThermalScreen(vm: MonitorViewModel) {
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
-                                    if (expanded) "收起未触发项"
+                                    if (expanded) "收起"
                                     else "查看全部 ${devs.size} 项 · $inactiveN 项未触发",
                                     color = Ink.accent, fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Medium,
@@ -342,17 +349,17 @@ fun ThermalScreen(vm: MonitorViewModel) {
                 }
             }
 
-            // ④ 分组热区（每类 Top-5 + 总数提示）
-            item { GroupedZones(all, priv.rootAvailable) }
+            // ④ 分组热区：CPU/GPU 等每组默认 Top-5，可展开看全部（含 HAL 官方温度）
+            item { ZoneGroupSections(all, halTemps, priv.rootAvailable) }
 
-            // ⑤ 84 区网格
+            // ⑤ 全部热区网格（数量随设备变化，不再固定 84）
             item {
                 MioCard(inset) {
-                    CardHead(if (all.isEmpty()) "全部 84 区" else "全部 ${all.size} 区") {
+                    CardHead(if (all.isEmpty()) "全部热区" else "全部 ${all.size} 区") {
                         PrivChip(priv.rootAvailable)
                     }
                     Spacer(Modifier.height(8.dp))
-                    Grid84(all)
+                    AllZonesGrid(all)
                     Spacer(Modifier.height(6.dp))
                     Text(
                         if (all.isEmpty()) "App 域无权限 · 需 Shizuku" else "20–50°C 归一化",
@@ -372,11 +379,96 @@ fun ThermalScreen(vm: MonitorViewModel) {
     }
 }
 
-private val GROUP_KEYS = listOf(
-    "CPU簇" to listOf("cpuss", "cpu"),
-    "GPU/NPU/内存" to listOf("gpuss", "nsp", "ddr", "video"),
-    "射频/充电/外壳" to listOf("pa", "pm8350", "battery", "skin", "usb", "tof"),
-)
+/** 全部热区分组卡片；CPU/GPU 展开时追加 HAL 官方温度，其他组同样可展开。 */
+@Composable
+private fun ZoneGroupSections(
+    all: List<ThermalZone>,
+    halTemps: List<HalTemp>,
+    rootActive: Boolean,
+) {
+    val groups = remember(all) { groupThermalZones(all) }
+    if (groups.isEmpty()) return
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = PageHPad),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        groups.forEach { group ->
+            val official = when (group.title) {
+                "CPU" -> halTemps.filter { it.type == 0 }
+                "GPU" -> halTemps.filter { it.type == 1 }
+                else -> emptyList()
+            }
+            ZoneGroupCard(group, official, rootActive)
+        }
+    }
+}
+
+@Composable
+private fun ZoneGroupCard(
+    group: ThermalZoneGroup,
+    official: List<HalTemp>,
+    rootActive: Boolean,
+) {
+    var expanded by remember(group.title, group.zones.size) { mutableStateOf(false) }
+    val zones = group.zones
+    val rows = visibleZoneRows(zones, expanded)
+    val maxC = (zones.mapNotNull { it.tempC } + official.mapNotNull { it.tempC })
+        .filter { it > 0 }.maxOrNull()
+    MioCard {
+        CardHead(group.title) {
+            if (maxC != null) {
+                Text("最高 ${f1(maxC)}°", color = Ink.off, fontSize = 10.5.sp)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text("${zones.size} 区", color = Ink.off, fontSize = 10.5.sp)
+            Spacer(Modifier.width(8.dp))
+            PrivChip(rootActive)
+        }
+        Spacer(Modifier.height(2.dp))
+        rows.forEach { z ->
+            MioBarRow(
+                name = zoneNameZh(z.name),
+                frac = tempFrac(z.tempC),
+                value = zoneRowValue(z, expanded),
+                barColor = tempColor(z.tempC),
+            )
+        }
+        if (expanded && official.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            Text("HAL 官方 · ${official.size} 项", color = Ink.off, fontSize = 10.sp)
+            official.sortedByDescending { it.tempC ?: Double.MIN_VALUE }.forEach { h ->
+                MioBarRow(
+                    name = "HAL·${h.name}",
+                    frac = tempFrac(h.tempC),
+                    value = "${f1(h.tempC)}°",
+                    barColor = tempColor(h.tempC),
+                )
+            }
+        }
+        val canExpand = zones.size > 5 || official.isNotEmpty()
+        if (canExpand) {
+            Spacer(Modifier.height(6.dp))
+            Row(
+                Modifier.fillMaxWidth().pressClick { expanded = !expanded },
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    if (expanded) "收起"
+                    else "查看全部 ${zones.size} 项" + if (official.isNotEmpty()) " · 含 HAL" else "",
+                    color = Ink.accent, fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+    }
+}
+
+private fun zoneRowValue(z: ThermalZone, expanded: Boolean): String {
+    val base = "${f1(z.tempC)}°"
+    if (!expanded) return base
+    return tripThresholdLabel(z)?.let { "$base / $it" } ?: base
+}
 
 /** UX(M10): sysfs 热区代号 → 人话前缀 + 编号（cpuss-0-0 → "CPU 0-0"，原名语义保留） */
 private fun zoneNameZh(raw: String): String {
@@ -399,48 +491,10 @@ private fun zoneNameZh(raw: String): String {
 }
 
 @Composable
-private fun GroupedZones(all: List<ThermalZone>, rootActive: Boolean) {
-    // M10: 分组过滤/排序只随数据变化重算，滚动重组不再全量执行
-    // L16: 保留每组总数，超出 5 条时给出"还有 N 个"提示
-    val groups = remember(all) {
-        GROUP_KEYS.map { (title, prefixes) ->
-            val allItems = prefixes.flatMap { p ->
-                all.filter { it.name.startsWith(p) && it.tempC != null }
-            }.distinctBy { it.id }.sortedByDescending { it.tempC }
-            Triple(title, allItems.take(5), allItems.size)
-        }.filter { (_, items, _) -> items.isNotEmpty() }
-    }
-    if (groups.isEmpty()) return
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = PageHPad),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        groups.forEach { (title, items, total) ->
-            MioCard {
-                CardHead(title) { PrivChip(rootActive) }
-                Spacer(Modifier.height(2.dp))
-                items.forEach { z ->
-                    MioBarRow(
-                        name = zoneNameZh(z.name),
-                        frac = tempFrac(z.tempC),
-                        value = "${f1(z.tempC)}°",
-                        barColor = tempColor(z.tempC),
-                    )
-                }
-                if (total > items.size) {
-                    Spacer(Modifier.height(3.dp))
-                    Text("还有 ${total - items.size} 个热区", color = Ink.off, fontSize = 10.5.sp)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Grid84(all: List<ThermalZone>) {
-    val cells = all.take(84)
+private fun AllZonesGrid(all: List<ThermalZone>) {
+    val cells = all
     if (cells.isEmpty()) {
-        // 占位 84 格（置灰）
+        // 无权限/待读取：置灰占位
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             repeat(7) {
                 Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {

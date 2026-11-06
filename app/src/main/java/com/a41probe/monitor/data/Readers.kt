@@ -725,7 +725,7 @@ object GpuReader {
  * 处理：非温度节点直接不进温度列表与统计；哨兵值（≤ -200°C）同理剔除。
  * 说明：这两个判定放在文件级，供 ThermalReader 与批量读取通道共用。 */
 private val NON_TEMP_PATTERNS = listOf(
-    "bcl-lvl", "bcl_lvl", "ibat-lvl", "sub1", "mmw_pa", "mmw-", "sdr", "socd",
+    "bcl", "ibat", "sub1", "mmw_pa", "mmw-", "sdr", "socd",
     "vbat", "usb", "isense_trim", "_pa", "modem-cfg", "lte-cc",
 )
 
@@ -831,6 +831,7 @@ object BulkReader {
 
     @Volatile private var zoneTypes: Map<Int, String>? = null
     @Volatile private var coolingMeta: Map<Int, Pair<String, Int>>? = null
+    @Volatile private var tripCache: Map<Int, List<ThermalTrip>>? = null
 
     // v0.27.2: grep 多文件一次 fork（原循环 ~170 fork，首读 2s+）
     private val ZONE_TYPE_CMD =
@@ -839,20 +840,12 @@ object BulkReader {
         "echo \"==TYPES==\"; grep -H \"\" /sys/class/thermal/cooling_device*/type 2>/dev/null; " +
         "echo \"==MAXS==\"; grep -H \"\" /sys/class/thermal/cooling_device*/max_state 2>/dev/null"
 
-    // 关键热缓解部件白名单：模式匹配（多厂商 cooling_device type），只对这些每秒读 cur_state
-    // （其余大量 modem/PA 255 级不每秒读）。高频项保留快速匹配，其余按 contains 模式。
-    private val COOLING_QUICK = setOf(
-        "gpu", "ufs", "battery", "cdsp", "cdsp_hw", "wlan",
-    )
+    // v3.12: 每区 trip 阈值（passive/hot/critical）恒定，首读缓存一次，不进每秒命令
+    private val TRIP_SCAN_CMD =
+        "echo \"==TRIPTEMP==\"; grep -H \"\" /sys/class/thermal/thermal_zone*/trip_point_*_temp 2>/dev/null; " +
+        "echo \"==TRIPTYPE==\"; grep -H \"\" /sys/class/thermal/thermal_zone*/trip_point_*_type 2>/dev/null"
 
-    private fun isCoolingRelevant(type: String): Boolean =
-        type in COOLING_QUICK ||
-            type.contains("thermal-cpufreq") || type.contains("thermal-devfreq") ||
-            type.contains("mali") || type.contains("ddr") || type.contains("gpu") ||
-            type.contains("display") || type.contains("panel") || type.contains("battery") ||
-            type.contains("cdsp") || type.contains("ufs") || type.contains("wlan") ||
-            type.contains("kgsl") ||
-            type.contains("mtk-cpufreq") || type.contains("mtk-")
+    // v3.12: cooling_device 全量读取（不再白名单）；每秒 cur_state 覆盖所有 64 个设备。
 
     /** PSU uevent 多行累积器：一次 cat uevent 拿全部键，替代 6 次逐文件 cat */
     private class MPsu(val dir: String, val type: String) {
@@ -890,6 +883,9 @@ object BulkReader {
             if (parsed.isNullOrEmpty()) return null
             zoneTypes = parsed
         }
+        if (tripCache == null) {
+            tripCache = parseTripScan(exec(TRIP_SCAN_CMD))
+        }
         if (coolingMeta == null) {
             val out = exec(COOLING_SCAN_CMD)
             val tmap = HashMap<Int, String>()
@@ -918,9 +914,10 @@ object BulkReader {
         }
         val types = zoneTypes ?: return null
         val meta = coolingMeta ?: emptyMap()
-        val coolIds = meta.filter { isCoolingRelevant(it.value.first) }.keys.sorted()
+        // v3.12: 全部 cooling_device（不再只读白名单），展开后能看到系统所有热缓解动作
+        val coolIds = meta.keys.sorted()
 
-        // 每秒命令：zone temp + load + stat + 白名单 cooling cur（同一 shell 调用，不额外 fork）
+        // 每秒命令：zone temp + load + stat + 全部 cooling cur（同一 shell 调用，不额外 fork）
         // v0.27.2: grep 合并多文件，fork 250+ → ~20，bulk 2.0s → 0.45s
         val sb = StringBuilder("{")
         sb.append(" grep -H \"\" /sys/class/thermal/thermal_zone*/temp 2>/dev/null;")
@@ -936,12 +933,13 @@ object BulkReader {
         sb.append(" echo \"==PSU==\"; for d in /sys/class/power_supply/*; do echo \"\${d##*/}|\$(cat \$d/type 2>/dev/null)|\$(cat \$d/uevent 2>/dev/null)\"; done;")
         sb.append(" }")
         val out = exec(sb.toString()) ?: return null
-        return parseBulk(out, types, meta, coolIds)
+        return parseBulk(out, types, meta, coolIds, tripCache.orEmpty())
     }
 
-    private fun parseBulk(
+    internal fun parseBulk(
         out: String, types: Map<Int, String>,
         meta: Map<Int, Pair<String, Int>>, coolIds: List<Int>,
+        trips: Map<Int, List<ThermalTrip>> = emptyMap(),
     ): Bulk? {
         val zones = mutableListOf<ThermalZone>()
         var load: String? = null
@@ -972,7 +970,7 @@ object BulkReader {
                         val tc = Units.safeTemp(v?.div(1000.0))
                         zones.add(ThermalZone(id, name, tc,
                             if (tc != null) DataState.OK else DataState.UNAVAILABLE,
-                            Priv.SHIZUKU, tempMC = v))
+                            Priv.SHIZUKU, tempMC = v, trips = trips[id].orEmpty()))
                     }
                 }
                 mode == 2 -> if (l.isNotBlank()) load = l.trim()
@@ -1016,6 +1014,47 @@ object BulkReader {
         if (zones.isEmpty() && load == null && stat == null) return null
         return Bulk(zones.sortedBy { it.id }, load, stat, coreStats, cooling, cpuCur, psu)
     }
+}
+
+/**
+ * v3.12: 解析 sysfs 的 trip_point_*_{temp,type} 阈值文件。
+ * 输入为 BulkReader 首读命令的原始输出；temp 为 m°C，转 °C 后按温度升序排列（降频线在前）。
+ */
+internal fun parseTripScan(out: String?): Map<Int, List<ThermalTrip>> {
+    if (out.isNullOrBlank()) return emptyMap()
+    val temps = HashMap<Pair<Int, Int>, Int>()
+    val types = HashMap<Pair<Int, Int>, String>()
+    var mode = 0
+    out.lineSequence().forEach { raw ->
+        val line = raw.trim()
+        when {
+            line == "==TRIPTEMP==" -> mode = 1
+            line == "==TRIPTYPE==" -> mode = 2
+            mode == 1 -> {
+                val key = tripKey(line) ?: return@forEach
+                line.substringAfterLast(":").trim().toIntOrNull()?.let { temps[key] = it }
+            }
+            mode == 2 -> {
+                val key = tripKey(line) ?: return@forEach
+                val t = line.substringAfterLast(":").trim()
+                if (t.isNotEmpty()) types[key] = t
+            }
+        }
+    }
+    if (temps.isEmpty()) return emptyMap()
+    return temps.entries.groupBy({ it.key.first }) { (key, mc) ->
+        ThermalTrip(types[key].orEmpty(), Units.safeTemp(mc / 1000.0))
+    }.mapValues { (_, list) ->
+        list.filter { it.tempC != null }.sortedBy { it.tempC }
+    }.filterValues { it.isNotEmpty() }
+}
+
+private fun tripKey(line: String): Pair<Int, Int>? {
+    val zone = line.substringAfter("thermal_zone", "").substringBefore("/").toIntOrNull()
+        ?: return null
+    val trip = line.substringAfter("trip_point_", "").substringBefore("_").toIntOrNull()
+        ?: return null
+    return zone to trip
 }
 
 /** Thermal HAL 低频读取（dumpsys thermalservice，节流 5s）：官方热状态 / HAL 分类温度 / 阈值红线。

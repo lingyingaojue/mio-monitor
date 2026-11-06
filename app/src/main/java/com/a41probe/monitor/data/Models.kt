@@ -170,6 +170,12 @@ data class MemInfo(
     val swapTotalGB: Double get() = swapTotalKB / 1048576.0
 }
 
+/** 热区 trip 阈值（sysfs 的 thermal_zone 下 trip_point_*；passive=降频，hot=高温，critical=关机） */
+data class ThermalTrip(
+    val type: String,
+    val tempC: Double? = null,
+)
+
 data class ThermalZone(
     val id: Int,
     val name: String,
@@ -178,6 +184,8 @@ data class ThermalZone(
     val priv: Priv = Priv.SHIZUKU,
     /** RAW：temp 原始 m°C（未÷1000），CSV RAW 区留证 */
     val tempMC: Int? = null,
+    /** v3.12: 该区的 trip_point 阈值（降频/高温/关机），无权限时为空 */
+    val trips: List<ThermalTrip> = emptyList(),
 ) {
     /** v0.28.2: 物理范围安全温度（-40..150°C），超界返回 null——消费方优先用此口径 */
     val tempSafe: Double? get() = tempC?.takeIf { it in -40.0..150.0 }
