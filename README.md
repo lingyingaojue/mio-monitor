@@ -8,12 +8,12 @@
 
 <br/>
 
-![Version](https://img.shields.io/badge/version-v2.0-007AFF)
+![Version](https://img.shields.io/badge/version-v3.0-007AFF)
 ![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
-![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)
-![Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white)
+![Kotlin](https://img.shields.io/badge/Kotlin-2.4-7F52FF?logo=kotlin&logoColor=white)
+![Compose](https://img.shields.io/badge/Jetpack%20Compose-Miuix-4285F4?logo=jetpackcompose&logoColor=white)
 ![Readonly](https://img.shields.io/badge/%E5%8F%AA%E8%AF%BB-%E4%B8%8D%E5%86%99%E7%B3%BB%E7%BB%9F%E8%8A%82%E7%82%B9-orange)
-![License](https://img.shields.io/badge/License-MIT-blue)
+![License](https://img.shields.io/badge/License-GPL--3.0-blue)
 
 <img src="docs/screenshots/01-dashboard.png" width="320"/>
 
@@ -25,7 +25,7 @@
 
 Mio 澪 是一款安卓硬件参数与性能监控应用。它把设备能够读到的硬件信息，尽可能完整、准确地呈现出来：CPU 每核频率与占用、GPU 负载与频率、电池电压电流功率与健康度、几十路热区温度与散热动作、内存与传感器。
 
-界面遵循浅色 iOS 风格，以卡片分组组织信息，曲线与数字使用同一套换算口径。设计目标是克制：不炫技、不堆叠装饰，让数据本身成为视觉主体。
+**v3.0 界面体系重做**：整套 UI 换成 BiliPai 的 Miuix 视觉语言——5 个主 tab 的悬浮玻璃底栏、滚动感知的玻璃顶栏、大圆角分组卡片、Miuix 设置页，并新增**浅色 / 深色 / 跟随系统**三种主题与**液态玻璃**（Android 13+）。设计系统源码搬运自 BiliPai 项目（GPL-3.0，见 [design-system/VENDORED.md](design-system/VENDORED.md)）。
 
 ---
 
@@ -63,7 +63,7 @@ Mio 澪 是一款安卓硬件参数与性能监控应用。它把设备能够读
 
 | 设置 | |
 |:---:|:---:|
-| <img src="docs/screenshots/06-settings.png" width="300"/> | <sub>玻璃效果与触感强度均在此切换</sub> |
+| <img src="docs/screenshots/06-settings.png" width="300"/> | <sub>以上截图为 v2.0（旧 iOS 风格）留档；v3.0 Miuix 界面截图待真机更新</sub> |
 
 </div>
 
@@ -118,11 +118,13 @@ Mio 澪 是一款安卓硬件参数与性能监控应用。它把设备能够读
 
 ## 显示与交互
 
-- **配色预设**：内置 6 套（晴空蓝 / 薄荷青 / 雾天青 / 暖奶米 / 浅草 / 紫藤），设置页即时切换。每套都按对比度取值——强调色压得住顶栏白字，卡片与页面底保持可分辨的亮度差，次级文字不低于 4.5:1；顶栏徽章、按钮、选中态的文字跟随主题前景色，浅色主题下不会出现白字看不清。
-- **玻璃效果三档**：`完整`（半透明 + 顶部高光 + 光泽柔化，Android 12 及以上使用 RenderEffect）/ `简约`（更实、叠加层更少、功耗更低）/ `关闭`（全实色卡片）。切换即时生效。
-- **触感反馈**：底部导航与卡片按下均有震动，强度分**轻 / 中 / 重**三档；设置页提供按键，按住可持续震动、松手即停，便于直观比较。
+- **两种主题模式**：浅色 / 深色 / 跟随系统，设置页即时切换；状态栏与导航栏图标自动跟随明暗。
+- **配色预设**：内置 6 套（晴空蓝 / 薄荷青 / 雾天青 / 暖奶米 / 浅草 / 紫藤）并各自派生深色版本，设置页即时切换。每套都按对比度取值——强调色压得住按钮文字，卡片与页面底保持可分辨的亮度差，次级文字不低于 4.5:1。
+- **角色立绘**：可在设置页开关；深色模式下自动降低不透明度并叠加页面底色渐变，避免影响卡片可读性。
+- **液态玻璃**：Android 13 及以上默认启用（Miuix 材质模糊，用于顶栏与底部 dock）；系统版本更低时自动降级为半透明实色表面，布局与交互不变。设置页可切回实色。
+- **导航结构**：5 个主 tab（仪表盘 / CPU / GPU / 电池 / 温度）+ 顶栏齿轮进入设置；传感器、被监控、监控与设备详情为整页二级页，带返回条。
+- **触感反馈**：底部 dock 切换、卡片与设置项按下均有震动，强度分**轻 / 中 / 重**三档；设置页提供按键，按住可持续震动、松手即停，便于直观比较。
 - **动效规范**：全局采用单一缓动曲线与统一时长（按下 130ms、松开 240ms、导航指示器 280ms、数值 320ms）。导航指示器平滑移动；卡片按下轻微收缩、阴影与明度同步下沉，抬起平滑恢复。
-- **内容层级**：文字与图表始终位于最上层，模糊仅作用于其下的材质层，不会影响内容清晰度。
 - **数值过渡**：CPU 占用、温度、内存等高频变化数值采用插值滚动，避免逐秒跳变。
 - **无障碍**：跟随系统「关闭动画」设置，开启时所有动效直接切换。
 
@@ -139,7 +141,7 @@ Mio 澪 是一款安卓硬件参数与性能监控应用。它把设备能够读
 ## 安装
 
 1. 从 [Releases](../../releases) 下载最新 APK；
-2. 允许「安装未知来源应用」后直接安装，支持 **Android 8.0 及以上**；
+2. 允许「安装未知来源应用」后直接安装，支持 **Android 8.0 及以上**（液态玻璃需 Android 13+，更低版本自动降级为实色表面）；
 3. 如需完整数据，可安装 [Shizuku](https://shizuku.rikka.app/) 并在应用内一键授权——并非必需。
 
 首次启动提供 10 页使用引导。
@@ -149,7 +151,7 @@ Mio 澪 是一款安卓硬件参数与性能监控应用。它把设备能够读
 ## 构建
 
 ```bash
-# 需 JDK 17 与 Android SDK 34
+# 需 JDK 21 与 Android SDK（platform 37 / build-tools 37）
 ./gradlew assembleDebug
 # 产物：app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -160,9 +162,10 @@ Mio 澪 是一款安卓硬件参数与性能监控应用。它把设备能够读
 
 | | |
 |---|---|
-| 语言 / UI | Kotlin 2.0.21 · Jetpack Compose（Material 3） |
-| 构建 | AGP 8.7.3 · Gradle 8.10.2 · JDK 17 |
-| 支持范围 | minSdk 26（Android 8.0）· targetSdk 34 |
+| 语言 / UI | Kotlin 2.4.0 · Jetpack Compose（Miuix 0.9.4 + Material 3） |
+| 构建 | AGP 9.3.2 · Gradle 9.5.0 · JDK 21 |
+| 支持范围 | minSdk 26（Android 8.0）· targetSdk 37 |
+| 设计系统 | BiliPai design-tokens / design-system（GPL-3.0，源码搬运，见 `design-system/VENDORED.md`） |
 | 架构 | 单 Activity + Compose；ViewModel 配合细粒度 StateFlow；硬件读取采用分层回退的 Reader |
 | 网络 | 仅局域网：mDNS（NSD）服务发现 + TCP 长连接 |
 
@@ -194,6 +197,8 @@ Mio 澪 是一款安卓硬件参数与性能监控应用。它把设备能够读
 
 ## 许可
 
-[MIT](LICENSE)
+[GPL-3.0](LICENSE)。Mio 2.0 及更早版本以 MIT 发布；v3.0 起因集成搬运自
+[BiliPai](https://github.com/jay3-yy/BiliPai)（GPL-3.0）的设计系统，整体以 GPL-3.0 分发。
+原 MIT 声明、上游致谢与第三方组件许可见 [NOTICE](NOTICE) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 <div align="center"><sub>Mio 澪 · 只读硬件监控</sub></div>

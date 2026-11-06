@@ -105,10 +105,20 @@ enum class Screen(val label: String) {
 }
 
 /** 5 个主 tab（BiliPai 底栏设计：5 项 + 悬浮 dock） */
-private val TAB_SCREENS = listOf(Screen.DASH, Screen.CPU, Screen.GPU, Screen.BAT, Screen.THERM)
+internal val MAIN_TAB_SCREENS: List<Screen> = listOf(
+    Screen.DASH, Screen.CPU, Screen.GPU, Screen.BAT, Screen.THERM,
+)
 
 /** 带底部导航的本机监控页集合；双模式与设置页为全屏页，不显示 dock。 */
-private val MAIN_TABS = TAB_SCREENS.toSet()
+private val MAIN_TABS = MAIN_TAB_SCREENS.toSet()
+
+/** 返回键策略：页面逐级返回，tab 页交给系统退出。 */
+internal fun backTarget(screen: Screen, settingsReturn: Screen): Screen = when (screen) {
+    Screen.RDETAIL -> Screen.MONITOR
+    Screen.SENS, Screen.AGENT, Screen.MONITOR -> Screen.SET
+    Screen.SET -> settingsReturn
+    else -> Screen.DASH
+}
 
 /** 底部 dock 的 5 项（图标 + 文案） */
 private fun tabItems(): List<MioTabItem> = listOf(
@@ -166,12 +176,7 @@ fun MainScreen(vm: MonitorViewModel = viewModel()) {
 
     val isTab = screen in MAIN_TABS
     BackHandler(enabled = !isTab) {
-        screen = when (screen) {
-            Screen.RDETAIL -> Screen.MONITOR
-            Screen.SENS, Screen.AGENT, Screen.MONITOR -> Screen.SET
-            Screen.SET -> settingsReturn
-            else -> Screen.DASH
-        }
+        screen = backTarget(screen, settingsReturn)
     }
 
     // 开屏品牌画面
@@ -264,6 +269,7 @@ fun MainScreen(vm: MonitorViewModel = viewModel()) {
                             onOpenAgent = { screen = Screen.AGENT },
                             onOpenMonitor = { screen = Screen.MONITOR },
                             onShowOnboarding = { showOnboarding = true },
+                            onBack = { screen = backTarget(Screen.SET, settingsReturn) },
                         )
                         Screen.AGENT -> AgentScreen(vm, onBack = { screen = Screen.SET })
                         Screen.MONITOR -> MonitorScreen(
@@ -280,8 +286,8 @@ fun MainScreen(vm: MonitorViewModel = viewModel()) {
             if (isTab) {
                 MioBottomDock(
                     items = tabItems(),
-                    selectedIndex = TAB_SCREENS.indexOf(screen).coerceAtLeast(0),
-                    onSelect = { idx -> screen = TAB_SCREENS.getOrElse(idx) { Screen.DASH } },
+                    selectedIndex = MAIN_TAB_SCREENS.indexOf(screen).coerceAtLeast(0),
+                    onSelect = { idx -> screen = MAIN_TAB_SCREENS.getOrElse(idx) { Screen.DASH } },
                 )
             }
         }
@@ -323,24 +329,28 @@ fun MainScreen(vm: MonitorViewModel = viewModel()) {
             LaunchedEffect(Unit) {
                 if (!reduce) appear.animateTo(1f, tween(520, easing = FastOutSlowInEasing))
             }
+            val splashArt = special.artFor("dashboard")
             Box(
                 modifier = Modifier.fillMaxSize().background(
                     Brush.verticalGradient(listOf(Ink.accent, Ink.accent2)),
                 ),
             ) {
-                Image(
-                    painter = painterResource(special.artFor("dashboard")),
-                    contentDescription = null,
-                    contentScale = ContentScale.FillHeight,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth(0.94f)
-                        .fillMaxHeight(0.78f)
-                        .graphicsLayer {
-                            alpha = appear.value
-                            translationY = (1f - appear.value) * 28.dp.toPx()
-                        },
-                )
+                // 素材缺失（第三方角色图不随仓库分发）时跳过绘制，避免 painterResource(0) 崩溃
+                if (splashArt != 0) {
+                    Image(
+                        painter = painterResource(splashArt),
+                        contentDescription = null,
+                        contentScale = ContentScale.FillHeight,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth(0.94f)
+                            .fillMaxHeight(0.78f)
+                            .graphicsLayer {
+                                alpha = appear.value
+                                translationY = (1f - appear.value) * 28.dp.toPx()
+                            },
+                    )
+                }
                 val wordA = ((appear.value - 0.25f) / 0.75f).coerceIn(0f, 1f)
                 Column(
                     modifier = Modifier

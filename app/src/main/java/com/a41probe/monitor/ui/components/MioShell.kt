@@ -66,8 +66,7 @@ fun MioTopBar(
     onStatusClick: () -> Unit,
     onSettingsClick: () -> Unit,
 ) {
-    // 顶栏始终保底可读的底（内容从其下方滚过），滚动细线在下方绘制
-    val scrollFrac = LocalScrollFraction.current
+    // 顶栏底色与页面一致（内容在 Column 布局中从其下方开始，无需透明渐变）
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -82,7 +81,7 @@ fun MioTopBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Ink.bg.copy(alpha = 0.9f))
+            .background(Ink.bg)
             .statusBarsPadding()
             .height(58.dp),
     ) {
@@ -145,31 +144,29 @@ fun MioTopBar(
                 )
             }
             Spacer(Modifier.width(10.dp))
-            // 设置：圆形齿轮按钮（BiliPai 首页右上角入口）
+            // 设置：48dp 触控目标内放 40dp 圆形齿轮按钮（BiliPai 首页右上角入口）
             Box(
                 modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(Ink.panel)
+                    .size(48.dp)
                     .clickable(onClick = onSettingsClick),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    Icons.Rounded.Settings,
-                    contentDescription = "设置",
-                    tint = Ink.tx2,
-                    modifier = Modifier.size(20.dp),
-                )
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Ink.panel),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Rounded.Settings,
+                        contentDescription = "设置",
+                        tint = Ink.tx2,
+                        modifier = Modifier.size(21.dp),
+                    )
+                }
             }
         }
-        // 滚动后出现底部细线，划分顶栏与内容
-        Box(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(0.5.dp)
-                .background(Ink.divider.copy(alpha = 0.65f * scrollFrac)),
-        )
     }
 }
 
@@ -206,7 +203,13 @@ fun MioBottomDock(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(66.dp)
-                .shadow(16.dp, shape, clip = false, ambientColor = Color(0x22000000), spotColor = Color(0x1E000000))
+                .shadow(
+                    elevation = 16.dp,
+                    shape = shape,
+                    clip = false,
+                    ambientColor = Ink.shadowTint.copy(alpha = 0.14f),
+                    spotColor = Ink.shadowTint.copy(alpha = 0.12f),
+                )
                 .clip(shape)
                 .background(Ink.card.copy(alpha = 0.94f))
                 .border(1.dp, Ink.stroke.copy(alpha = 0.7f), shape),

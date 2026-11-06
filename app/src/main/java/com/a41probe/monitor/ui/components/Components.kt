@@ -40,7 +40,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBackIosNew
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -467,7 +467,7 @@ fun ProbeButton(
  * v3.0 新增组件：供数据屏/功能页使用（BiliPai 版式的基础积木）
  * ============================================================ */
 
-/** 页面大标题（BiliPai 大标题 + 副标题） */
+/** 页面大标题（BiliPai 大标题 + 副标题）；横向留白与卡片 14dp 栅格对齐 */
 @Composable
 fun MioPageHeader(
     title: String,
@@ -477,7 +477,7 @@ fun MioPageHeader(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 6.dp),
+            .padding(start = 14.dp, end = 14.dp, top = 18.dp, bottom = 6.dp),
     ) {
         AppText(
             text = title,
@@ -628,7 +628,7 @@ fun MioInfoRow(
             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
         )
         Text(
-            value, color = if (mono) Ink.tx else Ink.tx2,
+            value, color = Ink.tx2,
             fontSize = 14.5.sp,
             fontFamily = if (mono) FontFamily.Monospace else null,
             fontWeight = FontWeight.Medium,
@@ -692,13 +692,15 @@ fun MioSwitchRow(
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
-    AppSwitchPreference(
-        title = title,
-        subtitle = subtitle,
-        checked = checked,
-        onCheckedChange = onCheckedChange,
-        enabled = enabled,
-    )
+    Box(modifier.fillMaxWidth()) {
+        AppSwitchPreference(
+            title = title,
+            subtitle = subtitle,
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+        )
+    }
 }
 
 /** 选择/导航设置行（Miuix 风格，右侧值 + chevron） */
@@ -710,13 +712,15 @@ fun MioChoiceRow(
     subtitle: String? = null,
     modifier: Modifier = Modifier,
 ) {
-    AppPreference(
-        title = title,
-        subtitle = subtitle,
-        value = value,
-        onClick = onClick,
-        showChevron = onClick != null,
-    )
+    Box(modifier.fillMaxWidth()) {
+        AppPreference(
+            title = title,
+            subtitle = subtitle,
+            value = value,
+            onClick = onClick,
+            showChevron = onClick != null,
+        )
+    }
 }
 
 /** 信息展示设置行（无 chevron） */
@@ -759,24 +763,31 @@ fun MioPageTopBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .height(56.dp),
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .height(58.dp),
     ) {
+        // 48dp 触控目标内放 40dp 圆形按钮
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(Ink.panel)
+                .size(48.dp)
                 .clickable(onClick = onBack),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                Icons.Rounded.ArrowBackIosNew,
-                contentDescription = "返回",
-                tint = Ink.tx,
-                modifier = Modifier.size(17.dp),
-            )
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Ink.panel),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "返回",
+                    tint = Ink.tx,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
         Text(
             title,
@@ -797,7 +808,7 @@ fun MioDivider(modifier: Modifier = Modifier) {
     Box(
         modifier
             .fillMaxWidth()
-            .height(0.5.dp)
+            .height(1.dp)
             .background(Ink.divider),
     )
 }

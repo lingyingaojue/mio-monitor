@@ -2,14 +2,15 @@ package com.a41probe.monitor.ui.components
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,14 +38,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.a41probe.monitor.R
 import com.a41probe.monitor.ui.theme.Ink
 import com.a41probe.monitor.ui.theme.SpecialConfig
 import com.a41probe.monitor.ui.theme.artKeyResolve
@@ -57,9 +55,10 @@ const val MIO_PREFS = "mio_prefs"
 const val KEY_ONBOARD_DONE = "onboarding_done"
 
 /**
- * 首次启动使用引导覆盖层：全屏浅色渐变底，
- * 右上角与左下角可「跳过」，右下角「下一步 / 开始使用」，
- * 切页 iOS 风格淡入 + 轻微横向位移；进度点指示位置。
+ * 首次启动使用引导覆盖层（Miuix / BiliPai 版）：
+ * 纯 Ink.bg 底 + 一张 28dp 大圆角分页卡片（立绘 / 标题 / 分条说明），
+ * 顶部左侧是品牌、右侧是「跳过」，底部是居中的进度指示与整行主按钮。
+ * 文案与 onFinish 行为与旧版完全一致；系统返回键 = 回上一页（首页返回 = 跳过结束）。
  */
 @Composable
 fun OnboardingOverlay(pages: List<OnboardingPage>, onFinish: () -> Unit) {
@@ -67,30 +66,40 @@ fun OnboardingOverlay(pages: List<OnboardingPage>, onFinish: () -> Unit) {
     val isLast = idx == pages.lastIndex
     // v0.26.1: 系统返回键 = 回上一页（首页返回=跳过结束），符合移动端导航直觉
     BackHandler { if (idx > 0) idx-- else onFinish() }
+    val dur = if (rememberAnimatorScale() > 0f) 280 else 0
+    val dotDur = if (dur > 0) 220 else 0
+    val cardShape = RoundedCornerShape(28.dp)
+    val artShape = RoundedCornerShape(22.dp)
 
-    Box(
-        Modifier.fillMaxSize()
-            // v1.3.1: 引导底随配色主题走（原写死淡蓝，遇暖色主题会串色）
-            .background(Brush.verticalGradient(listOf(Ink.card, Ink.bg))),
-    ) {
-        // 右上角跳过
-        Text(
-            "跳过",
-            color = Ink.tx3, fontSize = 13.sp,
-            modifier = Modifier
-                .align(Alignment.TopEnd).statusBarsPadding()
-                .clickable(onClick = onFinish)
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-        )
-
+    Box(Modifier.fillMaxSize().background(Ink.bg)) {
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-            val dur = if (rememberAnimatorScale() > 0f) 280 else 0
+            // 顶部：品牌（左） + 跳过（右）——Miuix 大留白，只保留必要操作
+            Row(
+                Modifier.fillMaxWidth().padding(start = 24.dp, end = 16.dp, top = 10.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Mio 澪", color = Ink.tx, fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "跳过",
+                    color = Ink.tx3, fontSize = 14.sp,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(onClick = onFinish)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
+
             AnimatedContent(
                 targetState = idx,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 transitionSpec = {
+                    // Reduce Motion：dur=0 时纯直切；否则淡入 + 极轻横向位移
                     (fadeIn(tween(dur)) +
-                        slideInHorizontally(tween(dur)) { it / 7 })
+                        slideInHorizontally(tween(dur)) { it / 10 })
                         .togetherWith(
                             fadeOut(tween((dur * 0.7f).toInt().coerceAtLeast(1)))
                         )
@@ -99,79 +108,94 @@ fun OnboardingOverlay(pages: List<OnboardingPage>, onFinish: () -> Unit) {
             ) { i ->
                 val p = pages[i]
                 Column(
-                    Modifier.fillMaxSize().padding(horizontal = 24.dp),
+                    Modifier.fillMaxSize().padding(horizontal = 20.dp),
                 ) {
-                    Spacer(Modifier.height(34.dp))
-                    Image(
-                        painter = painterResource(artKeyResolve(p.artKey)),
-                        contentDescription = null,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxWidth().height(248.dp),
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    Text(
-                        p.title,
-                        color = Ink.tx, fontSize = 23.sp, fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(12.dp))
                     Column(
-                        Modifier.weight(1f).fillMaxWidth()
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(9.dp),
+                        Modifier
+                            .fillMaxSize()
+                            .clip(cardShape)
+                            .background(Ink.card)
+                            .border(1.dp, Ink.stroke.copy(alpha = 0.6f), cardShape)
+                            .padding(24.dp),
                     ) {
-                        p.bullets.forEach { b ->
-                            Row(Modifier.fillMaxWidth()) {
-                                Box(
-                                    Modifier.padding(top = 7.dp).size(5.dp)
-                                        .clip(CircleShape).background(Ink.accent),
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Text(
-                                    b, color = Ink.tx2, fontSize = 13.sp,
-                                    lineHeight = 18.5.sp,
-                                )
-                            }
+                        // 立绘 / 表情：放在浅一档的圆角"舞台"里，透明底素材也不显单薄
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(206.dp)
+                                .clip(artShape)
+                                .background(Ink.panel.copy(alpha = 0.55f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Image(
+                                painter = painterResource(artKeyResolve(p.artKey)),
+                                contentDescription = null,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize().padding(10.dp),
+                            )
                         }
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(20.dp))
+                        Text(
+                            p.title,
+                            color = Ink.tx, fontSize = 26.sp, lineHeight = 32.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Column(
+                            Modifier.weight(1f).fillMaxWidth()
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            p.bullets.forEach { b ->
+                                Row(Modifier.fillMaxWidth()) {
+                                    Box(
+                                        Modifier.padding(top = 7.dp).size(5.dp)
+                                            .clip(CircleShape).background(Ink.accent),
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(
+                                        b, color = Ink.tx2, fontSize = 14.sp,
+                                        lineHeight = 21.sp,
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                        }
                     }
                 }
             }
 
-            // 底部：进度点 + 控制按钮
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 24.dp)
-                    .padding(bottom = 14.dp, top = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            // 底部：进度指示（居中）+ 主按钮（整行）——Miuix 的"一屏一个主动作"
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+                    .padding(top = 14.dp, bottom = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // 进度点
                 Row(
-                    Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     pages.indices.forEach { i ->
                         val active = i == idx
+                        val w by animateDpAsState(
+                            targetValue = if (active) 20.dp else 6.dp,
+                            animationSpec = tween(dotDur),
+                            label = "onboardDot",
+                        )
                         Box(
                             Modifier
                                 .clip(RoundedCornerShape(3.dp))
                                 .background(if (active) Ink.accent else Ink.stroke)
-                                .size(width = if (active) 16.dp else 6.dp, height = 6.dp),
+                                .size(width = w, height = 6.dp),
                         )
                     }
                 }
-                if (!isLast) {
-                    Text(
-                        "跳过",
-                        color = Ink.tx3, fontSize = 14.sp,
-                        modifier = Modifier
-                            .clickable(onClick = onFinish)
-                            .padding(horizontal = 8.dp, vertical = 10.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                }
+                Spacer(Modifier.height(16.dp))
                 ProbeButton(
                     text = if (isLast) "开始使用" else "下一步",
                     accent = true,
                     onClick = { if (isLast) onFinish() else idx++ },
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }

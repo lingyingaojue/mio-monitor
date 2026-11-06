@@ -1,23 +1,5 @@
 package com.a41probe.monitor.ui.screens
 
-import com.a41probe.monitor.ui.components.GlassConfig
-import com.a41probe.monitor.ui.components.GlassLevel
-import com.a41probe.monitor.ui.components.HapticLevel
-import com.a41probe.monitor.ui.theme.Palettes
-import com.a41probe.monitor.ui.theme.ThemeConfig
-import com.a41probe.monitor.ui.theme.SpecialConfig
-import com.a41probe.monitor.ui.theme.Specials
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import androidx.compose.foundation.border
-import com.a41probe.monitor.ui.components.MioHaptics
-import com.a41probe.monitor.ui.components.rememberHaptics
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
-import com.a41probe.monitor.ui.components.MioPageTitle
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
@@ -28,24 +10,38 @@ import android.hardware.SensorManager
 import android.os.Build
 import android.os.Environment
 import android.os.Handler
-import android.os.StatFs
 import android.os.Looper
+import android.os.StatFs
 import android.provider.MediaStore
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,36 +52,71 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.a41probe.monitor.BuildConfig
 import com.a41probe.monitor.data.MonitorViewModel
 import com.a41probe.monitor.data.RootBridge
-import com.a41probe.monitor.data.ThermalReader
 import com.a41probe.monitor.data.ShizukuBridge
-import com.a41probe.monitor.data.Snapshot
-import com.a41probe.monitor.ui.components.CardTitle
+import com.a41probe.monitor.data.ThermalReader
 import com.a41probe.monitor.ui.components.DotBadge
+import com.a41probe.monitor.ui.components.GlassConfig
+import com.a41probe.monitor.ui.components.GlassLevel
+import com.a41probe.monitor.ui.components.HapticLevel
+import com.a41probe.monitor.ui.components.MioCard
+import com.a41probe.monitor.ui.components.MioChoiceRow
+import com.a41probe.monitor.ui.components.MioHaptics
+import com.a41probe.monitor.ui.components.MioInfoRow
+import com.a41probe.monitor.ui.components.MioPageTopBar
+import com.a41probe.monitor.ui.components.MioPreferenceGroup
+import com.a41probe.monitor.ui.components.MioSectionHeader
+import com.a41probe.monitor.ui.components.MioSettingRow
+import com.a41probe.monitor.ui.components.MioSwitchRow
 import com.a41probe.monitor.ui.components.ProbeButton
-import com.a41probe.monitor.ui.components.SafeCard
-import com.a41probe.monitor.ui.components.SettingRow
-import com.a41probe.monitor.ui.components.StatRow
+import com.a41probe.monitor.ui.components.ScrollAware
+import com.a41probe.monitor.ui.components.rememberAnimatorScale
+import com.a41probe.monitor.ui.components.rememberHaptics
 import com.a41probe.monitor.ui.theme.Ink
-import com.a41probe.monitor.ui.theme.Priv
+import com.a41probe.monitor.ui.theme.Palette
+import com.a41probe.monitor.ui.theme.Palettes
+import com.a41probe.monitor.ui.theme.SpecialConfig
+import com.a41probe.monitor.ui.theme.SpecialTheme
+import com.a41probe.monitor.ui.theme.Specials
+import com.a41probe.monitor.ui.theme.ThemeConfig
+import com.a41probe.monitor.ui.theme.ThemeMode
+import com.a41probe.monitor.ui.theme.liquidGlassSupported
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 import java.io.File
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import com.a41probe.monitor.ui.components.ScrollAware
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/* ============================================================
+ * 设置页（BiliPai / Miuix 版）：固定返回条 + 分组偏好列表。
+ * 业务行为与持久化键完全沿用旧实现：
+ *  - ThemeConfig  : 明暗模式 / 配色预设 / 角色立绘开关
+ *  - SpecialConfig: 角色预设（整组立绘 + 配色）
+ *  - GlassConfig  : 液态玻璃三档
+ *  - MioHaptics   : 触感强度（按住持续震、轻点选中）
+ *  - CSV 导出、Shizuku/Root 提权通道、双模式入口、采样/数据/设备信息/关于
+ * ============================================================ */
+
+private val GLASS_LEVELS = listOf(GlassLevel.FULL, GlassLevel.LITE, GlassLevel.OFF)
+private val GLASS_LABELS = listOf("完整", "简约", "关闭")
+private val HAPTIC_LEVELS = listOf(HapticLevel.LIGHT, HapticLevel.MEDIUM, HapticLevel.HEAVY)
+private val HAPTIC_LABELS = listOf("轻", "中", "重")
 
 // ---- v20.14: 设备信息全部运行时真读（不写死机型/SoC，兼容任意手机） ----
 private fun readSoc(): String {
@@ -276,7 +307,7 @@ private fun exportCsv(vm: MonitorViewModel, ctx: Context) {
             }
         // tof-therm 46.9℃ 为恒定异常传感器（与 UI 同口径不纳入热区榜），topN 前剔除避免误导
         ThermalReader.topN(s.thermalAll.filter { it.name != "tof-therm" }, 8).forEach { z ->
-            ren("thermal_top.${z.name}", z.tempC?.let { "%.1f".format(f1, it) } ?: "", "C", "温度")
+            ren("thermal_top.${z.name}", z.tempC?.let { x -> "%.1f".format(f1, x) } ?: "", "C", "温度")
         }
         // 内存（P1-10: 小数位对齐 UI %.1f）
         s.mem?.let { m ->
@@ -402,7 +433,8 @@ private fun launchShizuku(ctx: Context) {
     }
 }
 
-/** 设置：提权通道 + 采样 + 数据 + 关于 */
+/** 设置：外观 · 提权通道 · 双模式 · 采样 · 数据 · 设备信息 · 关于（BiliPai 分组列表） */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     vm: MonitorViewModel,
@@ -410,364 +442,641 @@ fun SettingsScreen(
     onOpenAgent: () -> Unit = {},
     onOpenMonitor: () -> Unit = {},
     onShowOnboarding: () -> Unit = {},
+    onBack: () -> Unit = {},
 ) {
     // v0.28.0: 设置页只需权限三态 → privFlow（低频流，整页不再每秒重组）
     val snap by vm.privFlow.collectAsState()
     val ctx = LocalContext.current
-        val listState = rememberLazyListState()
-    ScrollAware(listState) {
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            MioPageTitle("设置", "提权通道 · 双模式 · 导出")
-        }
-        item {
-            SafeCard(fallbackTitle = "局域网双模式") {
-                CardTitle("局域网双模式")
-                Text("两台手机装同一个 App：一台被监控、一台监控，自动发现、全自动连接。",
-                    color = Ink.tx2, fontSize = 11.5.sp, lineHeight = 16.sp)
-                Spacer(Modifier.height(11.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    ProbeButton(text = "被监控模式", onClick = onOpenAgent,
-                        modifier = Modifier.weight(1f))
-                    Spacer(Modifier.width(8.dp))
-                    ProbeButton(text = "监控其他设备", accent = true, onClick = onOpenMonitor,
-                        modifier = Modifier.weight(1f))
-                }
-            }
-        }
-        item {
-            SafeCard(fallbackTitle = "提权通道") {
-                CardTitle("提权通道")
-                Spacer(Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Shizuku", color = Ink.tx, fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold)
-                        Text(
-                            if (snap.shizukuActive) "API 已授权 · 服务 ping 通"
-                            else if (ShizukuBridge.active) "服务在 · 未授权（点击授权）"
-                            else "服务未启动（Shizuku App 中启动）",
-                            color = Ink.tx2, fontSize = 11.sp,
+    val listState = rememberLazyListState()
+
+    // 外观配置的本地镜像：写入持久化后立即反映到当前页
+    var mode by remember { mutableStateOf(ThemeConfig.mode()) }
+    var showModeSheet by remember { mutableStateOf(false) }
+    var palSel by remember { mutableStateOf<Palette>(ThemeConfig.palette()) }
+    var artwork by remember { mutableStateOf(ThemeConfig.showArtwork()) }
+    var glassSel by remember { mutableStateOf(GlassConfig.current()) }
+    var hapticSel by remember { mutableStateOf(MioHaptics.current()) }
+    var specSel by remember { mutableStateOf<SpecialTheme>(SpecialConfig.current()) }
+    val haptics = rememberHaptics()
+    val animScale = rememberAnimatorScale()
+
+    Column(Modifier.fillMaxWidth().statusBarsPadding()) {
+        // 整页自绘返回条（SET 页面在 MainActivity 中不显示全局顶栏）
+        MioPageTopBar(title = "设置", onBack = onBack)
+
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            ScrollAware(listState) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+                    contentPadding = PaddingValues(
+                        start = 16.dp, end = 16.dp, top = 2.dp, bottom = 20.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    /* ---------------- 外观 ---------------- */
+                    item {
+                        MioSectionHeader(
+                            "外观",
+                            modifier = Modifier.padding(start = 4.dp, top = 8.dp),
                         )
                     }
-                    // S6: 三态：已授权(蓝) / 服务在未授权(黄) / 未启动(灰)
-                    val (badgeCol, badgeTxt) = when {
-                        snap.shizukuActive -> Ink.accent to "已激活"
-                        ShizukuBridge.active -> Ink.warn to "待授权"
-                        else -> Ink.off to "未启动"
-                    }
-                    DotBadge(badgeCol, badgeTxt)
-                }
-                Spacer(Modifier.height(8.dp))
-                // v20.14: 一键授权（优先 Root；无 Root 用 Shizuku）——IO 异步，不卡 UI
-                val authScope = rememberCoroutineScope()
-                ProbeButton(
-                    text = "一键授权（优先 Root）",
-                    accent = !(snap.rootAvailable || snap.shizukuActive),
-                    onClick = {
-                        authScope.launch {
-                            val gotRoot = withContext(Dispatchers.IO) {
-                                RootBridge.refresh()
-                                RootBridge.available
-                            }
-                            if (gotRoot) {
-                                withContext(Dispatchers.Main) { vm.refreshShizuku() }
-                                return@launch
-                            }
-                            val active = withContext(Dispatchers.IO) { ShizukuBridge.refresh() }
-                            if (active) {
-                                if (!ShizukuBridge.authorized) ShizukuBridge.requestPermission()
-                                withContext(Dispatchers.Main) { vm.refreshShizuku() }
-                            } else {
-                                Toast.makeText(ctx, "未检测到 Root / Shizuku 服务，当前为免提权模式",
-                                    Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(8.dp))
-                // UX(M27): 给新用户一条"获得 Shizuku"的明确路径
-                SettingRow("打开 Shizuku App", sub = "未安装则提示下载地址", trailing = {
-                    ProbeButton(text = "打开", onClick = { launchShizuku(ctx) })
-                })
-                Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Root", color = Ink.tx, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        // S7: 真实 su 探测结果，不再硬编码假状态
-                        Text(if (snap.rootAvailable) "已检测到 su · Root 优先，R 档项已解锁"
-                            else "未检测到 su（无 Root 时用 Shizuku 解锁 S 档项）",
-                            color = if (snap.rootAvailable) Ink.tx2 else Ink.off, fontSize = 11.sp)
-                    }
-                    // v20.12(S2-16): Root 徽章用橙色，与顶栏 Root 语义统一
-                    DotBadge(if (snap.rootAvailable) Ink.warn else Ink.off,
-                        if (snap.rootAvailable) "已激活" else "未激活")
-                }
-            }
-        }
-        item {
-            // v0.28.3: 玻璃效果档位（完整/简约/关闭，立即生效）
-            SafeCard(fallbackTitle = "显示") {
-                CardTitle("显示")
-                Spacer(Modifier.height(6.dp))
-                Text("玻璃效果：完整 = 卡片与导航栏半透明、透出背景立绘（推荐）；简约 = 半透明更实，少一层透明叠加（低端机更流畅）；关闭 = 全部纯色卡片。",
-                    color = Ink.tx2, fontSize = 11.sp, lineHeight = 16.sp)
-                Spacer(Modifier.height(10.dp))
-                var glassSel by remember { mutableStateOf(GlassConfig.current()) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(GlassLevel.FULL to "完整", GlassLevel.LITE to "简约", GlassLevel.OFF to "关闭").forEach { (lv, label) ->
-                        val sel = glassSel == lv
-                        Box(
-                            Modifier.weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (sel) Ink.accent else Color(0xFFF2F2F7))
-                                .clickable {
-                                    glassSel = lv
-                                    GlassConfig.set(ctx, lv)
-                                }
-                                .padding(vertical = 10.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(label, color = if (sel) Ink.onAccent else Ink.tx2,
-                                fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
-                Spacer(Modifier.height(14.dp))
-                Spacer(Modifier.height(14.dp))
-                // v1.1 第 1 批：配色主题（全局强调色 + 页面底色；立绘与语义色不变）
-                Text("配色：切换全局强调色与页面底色。温度红/橙/绿等语义色保持不变，避免影响数据判读。",
-                    color = Ink.tx2, fontSize = 11.sp, lineHeight = 16.sp)
-                Spacer(Modifier.height(8.dp))
-                var palSel by remember { mutableStateOf(ThemeConfig.current()) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Palettes.ALL.forEach { p ->
-                        val sel = palSel.id == p.id
-                        Box(
-                            Modifier.weight(1f)
-                                .height(34.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (sel) p.accent.copy(alpha = 0.14f) else Color(0xFFF2F2F7))
-                                .border(
-                                    width = if (sel) 1.5.dp else 0.dp,
-                                    color = if (sel) p.accent else Color.Transparent,
-                                    shape = RoundedCornerShape(10.dp),
-                                )
-                                .clickable { palSel = p; ThemeConfig.set(ctx, p) },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Box(
-                                Modifier.width(18.dp).height(18.dp)
-                                    .clip(RoundedCornerShape(9.dp))
-                                    .background(p.accent)
+                    item {
+                        MioPreferenceGroup {
+                            MioChoiceRow(
+                                title = "明暗模式",
+                                value = mode.label,
+                                subtitle = "跟随系统，或锁定浅色 / 深色",
+                                onClick = { showModeSheet = true },
                             )
-                        }
-                    }
-                }
-                // v1.3: 特殊预设（角色）——与配色预设分开：整组换立绘 + 配色，可单独微调
-                // 只有默认角色时整段隐藏（角色素材不随仓库分发，缺失的角色预设自动不出现）
-                val specials = Specials.all()
-                if (specials.size > 1) {
-                    Spacer(Modifier.height(14.dp))
-                    Text("角色预设：整组切换立绘与配色。和上面的配色预设相互独立——先挑角色，再用配色微调。",
-                        color = Ink.tx2, fontSize = 11.sp, lineHeight = 16.sp)
-                    Spacer(Modifier.height(8.dp))
-                    var specSel by remember { mutableStateOf(SpecialConfig.current()) }
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        specials.forEach { s ->
-                            val sel = specSel.id == s.id
-                            val tint = s.palette?.accent ?: Ink.accent
-                            Row(
-                                modifier = Modifier.fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (sel) tint.copy(alpha = 0.12f) else Color(0xFFF2F2F7))
-                                    .border(
-                                        width = if (sel) 1.5.dp else 0.dp,
-                                        color = if (sel) tint else Color.Transparent,
-                                        shape = RoundedCornerShape(12.dp),
-                                    )
-                                    .clickable {
-                                        specSel = s
-                                        SpecialConfig.set(ctx, s)
+                            PalettePicker(
+                                selected = palSel,
+                                onSelect = { p ->
+                                    palSel = p
+                                    ThemeConfig.set(ctx, p)
+                                },
+                            )
+                            MioSwitchRow(
+                                title = "显示角色立绘",
+                                subtitle = "页面背景展示当前角色插画",
+                                checked = artwork,
+                                onCheckedChange = { on ->
+                                    artwork = on
+                                    ThemeConfig.setArtwork(ctx, on)
+                                },
+                            )
+                            val specials = Specials.all()
+                            if (specials.size > 1) {
+                                CharacterPicker(
+                                    selected = specSel,
+                                    specials = specials,
+                                    onSelect = { sp ->
+                                        specSel = sp
+                                        SpecialConfig.set(ctx, sp)
                                         // 角色自带配色时一并套用；澪不绑定配色，保留当前配色预设
-                                        s.palette?.let { p ->
+                                        sp.palette?.let { p ->
                                             palSel = p
                                             ThemeConfig.set(ctx, p)
                                         }
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
+                                    },
+                                )
+                            }
+                            // 液态玻璃：只有 Android 13+（Miuix blur 模块要求 API 33）才真正生效；
+                            // 低版本与「关闭」等价，避免设置项名不副实
+                            if (liquidGlassSupported()) {
+                                MioSwitchRow(
+                                    title = "液态玻璃",
+                                    checked = glassSel == GlassLevel.FULL,
+                                    subtitle = "Android 13+ 的 Miuix 液态控件（开关/滑块/按钮材质）；关闭后为纯色控件",
+                                    onCheckedChange = { on ->
+                                        val level = if (on) GlassLevel.FULL else GlassLevel.OFF
+                                        glassSel = level
+                                        GlassConfig.set(ctx, level)
+                                    },
+                                )
+                            } else {
+                                MioSettingRow(
+                                    title = "液态玻璃",
+                                    value = "Android 13+ 可用",
+                                    subtitle = "当前系统版本不支持 Miuix 模糊，已自动使用纯色控件",
+                                )
+                            }
+                            SegmentSetting(
+                                title = "触感强度",
+                                subtitle = "按住「轻 / 中 / 重」任意一键可持续震动（松手即停），轻点选中该档",
+                                labels = HAPTIC_LABELS,
+                                selectedIndex = HAPTIC_LEVELS.indexOf(hapticSel).coerceAtLeast(0),
+                                onSelect = { idx ->
+                                    hapticSel = HAPTIC_LEVELS[idx]
+                                    MioHaptics.set(ctx, HAPTIC_LEVELS[idx])
+                                    haptics.press()
+                                },
+                                onPressStart = { idx -> MioHaptics.startHold(ctx, HAPTIC_LEVELS[idx]) },
+                                onPressEnd = { MioHaptics.stopHold(ctx) },
+                            )
+                            MioSettingRow(
+                                title = "界面动效",
+                                value = when {
+                                    animScale <= 0f -> "已关闭"
+                                    animScale == 1f -> "标准"
+                                    else -> "×%.1f".format(animScale)
+                                },
+                                subtitle = "跟随系统「动画时长缩放」，不额外提供开关",
+                            )
+                        }
+                    }
+
+                    /* ---------------- 提权通道 ---------------- */
+                    item {
+                        MioSectionHeader(
+                            "提权通道",
+                            modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                        )
+                    }
+                    item {
+                        MioPreferenceGroup {
+                            StatusBadgeRow(
+                                title = "Shizuku",
+                                subtitle = when {
+                                    snap.shizukuActive -> "API 已授权 · 服务 ping 通"
+                                    ShizukuBridge.active -> "服务在 · 未授权（点下方一键授权）"
+                                    else -> "服务未启动（请先在 Shizuku App 中启动）"
+                                },
+                                // S6: 三态：已授权(蓝) / 服务在未授权(黄) / 未启动(灰)
+                                badgeColor = when {
+                                    snap.shizukuActive -> Ink.accent
+                                    ShizukuBridge.active -> Ink.warn
+                                    else -> Ink.off
+                                },
+                                badgeText = when {
+                                    snap.shizukuActive -> "已激活"
+                                    ShizukuBridge.active -> "待授权"
+                                    else -> "未启动"
+                                },
+                            )
+                            StatusBadgeRow(
+                                title = "Root",
+                                subtitle = if (snap.rootAvailable) {
+                                    "已检测到 su · Root 优先，R 档项已解锁"
+                                } else {
+                                    "未检测到 su（无 Root 时用 Shizuku 解锁 S 档项）"
+                                },
+                                // v20.12(S2-16): Root 徽章用橙色，与顶栏 Root 语义统一
+                                badgeColor = if (snap.rootAvailable) Ink.warn else Ink.off,
+                                badgeText = if (snap.rootAvailable) "已激活" else "未激活",
+                            )
+                            Column(
+                                Modifier.fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
                             ) {
-                                val th = s.thumbRes()
-                                if (th != 0) {
+                                // v20.14: 一键授权（优先 Root；无 Root 用 Shizuku）——IO 异步，不卡 UI
+                                val authScope = rememberCoroutineScope()
+                                ProbeButton(
+                                    text = "一键授权（优先 Root）",
+                                    accent = !(snap.rootAvailable || snap.shizukuActive),
+                                    onClick = {
+                                        authScope.launch {
+                                            val gotRoot = withContext(Dispatchers.IO) {
+                                                RootBridge.refresh()
+                                                RootBridge.available
+                                            }
+                                            if (gotRoot) {
+                                                withContext(Dispatchers.Main) { vm.refreshShizuku() }
+                                                return@launch
+                                            }
+                                            val active = withContext(Dispatchers.IO) { ShizukuBridge.refresh() }
+                                            if (active) {
+                                                if (!ShizukuBridge.authorized) ShizukuBridge.requestPermission()
+                                                withContext(Dispatchers.Main) { vm.refreshShizuku() }
+                                            } else {
+                                                Toast.makeText(
+                                                    ctx,
+                                                    "未检测到 Root / Shizuku 服务，当前为免提权模式",
+                                                    Toast.LENGTH_LONG,
+                                                ).show()
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                // UX(M27): 给新用户一条"获得 Shizuku"的明确路径
+                                ProbeButton(
+                                    text = "打开 Shizuku App",
+                                    onClick = { launchShizuku(ctx) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                    }
+
+                    /* ---------------- 局域网双模式 ---------------- */
+                    item {
+                        MioSectionHeader(
+                            "局域网双模式",
+                            modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                        )
+                    }
+                    item {
+                        MioPreferenceGroup {
+                            MioChoiceRow(
+                                title = "被监控模式",
+                                subtitle = "本机作为服务端广播，允许其他设备查看",
+                                value = "进入",
+                                onClick = onOpenAgent,
+                            )
+                            MioChoiceRow(
+                                title = "监控其他设备",
+                                subtitle = "mDNS 自动发现同网段的被监控设备",
+                                value = "进入",
+                                onClick = onOpenMonitor,
+                            )
+                        }
+                    }
+                    item {
+                        Text(
+                            "两台手机装同一个 App：一台被监控、一台监控，自动发现、全自动连接。",
+                            color = Ink.off, fontSize = 11.sp, lineHeight = 15.sp,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                        )
+                    }
+
+                    /* ---------------- 采样 ---------------- */
+                    item {
+                        MioSectionHeader(
+                            "采样",
+                            modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                        )
+                    }
+                    item {
+                        MioPreferenceGroup {
+                            MioSettingRow(
+                                title = "采样周期",
+                                value = "1s（固定）",
+                                subtitle = "前台实时刷新，后台自动降为 3s",
+                            )
+                            // v20.17(P1-11): 两个"规划中"占两行是噪音——折叠成一行，一眼扫过
+                            MioSettingRow(
+                                title = "24h 历史",
+                                value = "规划中",
+                                subtitle = "本地长周期记录",
+                            )
+                        }
+                    }
+
+                    /* ---------------- 数据 ---------------- */
+                    item {
+                        MioSectionHeader(
+                            "数据",
+                            modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                        )
+                    }
+                    item {
+                        MioPreferenceGroup {
+                            MioChoiceRow(
+                                title = "导出快照 CSV",
+                                subtitle = "全部参数（写入 下载/Mio）",
+                                value = "导出",
+                                onClick = { exportCsv(vm, ctx) },
+                            )
+                            MioChoiceRow(
+                                title = "传感器总览",
+                                subtitle = "实时通道与全部传感器列表",
+                                value = "查看",
+                                onClick = onOpenSensors,
+                            )
+                            MioChoiceRow(
+                                title = "使用引导",
+                                subtitle = "重看首次启动的完整功能说明",
+                                value = "重看",
+                                onClick = onShowOnboarding,
+                            )
+                        }
+                    }
+
+                    /* ---------------- 设备信息 ---------------- */
+                    item {
+                        MioSectionHeader(
+                            "设备信息",
+                            modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                        )
+                    }
+                    item {
+                        // v20.21(P2-16): 读 /proc 移出组合——组合每秒重组，不再反复在主线程读文件
+                        var soc by remember { mutableStateOf("–") }
+                        var kernel by remember { mutableStateOf("–") }
+                        var memInfo by remember { mutableStateOf("–") }
+                        var storageInfo by remember { mutableStateOf("–") }
+                        // v0.23.0: SoC 平台识别结果（PlatformDetector，进程级缓存）
+                        var platformLine by remember { mutableStateOf("–") }
+                        var boardPlatform by remember { mutableStateOf("–") }
+                        LaunchedEffect(Unit) {
+                            val r = withContext(Dispatchers.IO) {
+                                listOf(readSoc(), readKernel(), readMem(), readStorage())
+                            }
+                            soc = r[0]; kernel = r[1]; memInfo = r[2]; storageInfo = r[3]
+                            // 平台识别在 IO 线程执行（内部 getprop 可能起进程），结果恒定
+                            val p = withContext(Dispatchers.IO) {
+                                com.a41probe.monitor.data.PlatformDetector.get()
+                            }
+                            platformLine = p.displayLine
+                            boardPlatform = p.boardPlatform ?: "–"
+                        }
+                        // v20.17(P1-11): 静态信息去绿点——色点语义留给"健康/异常"，设备信息不参与
+                        MioCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)) {
+                            MioInfoRow("品牌", "${Build.BRAND} · ${Build.MANUFACTURER}")
+                            MioInfoRow("机型", Build.MODEL)
+                            MioInfoRow("SoC", soc)
+                            MioInfoRow("平台", platformLine)
+                            MioInfoRow("Board Platform", boardPlatform)
+                            MioInfoRow("系统", "Android ${Build.VERSION.RELEASE} · SDK ${Build.VERSION.SDK_INT}")
+                            MioInfoRow("安全补丁", Build.VERSION.SECURITY_PATCH ?: "–")
+                            MioInfoRow("内核", kernel)
+                            MioInfoRow("内存", memInfo)
+                            MioInfoRow("屏幕", readScreen(ctx))
+                            MioInfoRow("存储", storageInfo)
+                        }
+                    }
+
+                    /* ---------------- 关于 ---------------- */
+                    item {
+                        MioSectionHeader(
+                            "关于",
+                            modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                        )
+                    }
+                    item {
+                        MioCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)) {
+                            MioInfoRow(
+                                "App",
+                                "v${BuildConfig.VERSION_NAME} · 纯只读",
+                                stateColor = Ink.accent,
+                                mono = false,
+                            )
+                            // v1.3.0: 当前角色（头像随角色预设变化；素材缺失则不画图只留文字）
+                            val curSpec = SpecialConfig.current()
+                            val curThumb = curSpec.thumbRes()
+                            if (curThumb != 0) {
+                                Spacer(Modifier.height(10.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Image(
-                                        painter = painterResource(th),
+                                        painter = painterResource(curThumb),
                                         contentDescription = null,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier.size(34.dp).clip(CircleShape),
                                     )
                                     Spacer(Modifier.width(10.dp))
-                                }
-                                Column(Modifier.weight(1f)) {
-                                    Text(s.label, color = Ink.tx, fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold)
-                                    Text(s.subtitle, color = Ink.tx2, fontSize = 11.sp)
-                                }
-                                if (sel) {
-                                    Text("当前", color = tint, fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold)
+                                    Column {
+                                        Text("当前角色", color = Ink.tx3, fontSize = 11.sp)
+                                        Text(
+                                            curSpec.label,
+                                            color = Ink.tx, fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
+                    item {
+                        Text(
+                            "纯只读 · 缺失项置灰，不显示伪造值",
+                            color = Ink.off, fontSize = 10.5.sp,
+                            modifier = Modifier.padding(horizontal = 4.dp),
+                        )
+                    }
+                    item { Spacer(Modifier.height(4.dp)) }
                 }
-                Spacer(Modifier.height(14.dp))
-                // v0.28.13: 触感强度——**按住就持续震、松手即停**；轻点则该档被选中并保存
-                Text("触感强度：按住「轻/中/重」任意一键可一直震（松手即停），轻点选中该档。",
-                    color = Ink.tx2, fontSize = 11.sp, lineHeight = 16.sp)
-                Spacer(Modifier.height(8.dp))
-                val haptics = rememberHaptics()
-                var hapticSel by remember { mutableStateOf(MioHaptics.current()) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(
-                        HapticLevel.LIGHT to "轻",
-                        HapticLevel.MEDIUM to "中",
-                        HapticLevel.HEAVY to "重",
-                    ).forEach { (lv, label) ->
-                        val sel = hapticSel == lv
-                        Box(
-                            Modifier.weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (sel) Ink.accent else Color(0xFFF2F2F7))
-                                .pointerInput(lv) {
-                                    detectTapGestures(
-                                        onPress = {
-                                            MioHaptics.startHold(ctx, lv)
-                                            tryAwaitRelease()
-                                            MioHaptics.stopHold(ctx)
-                                        },
-                                        onTap = {
-                                            hapticSel = lv
-                                            MioHaptics.set(ctx, lv)
-                                            haptics.press()
-                                        },
-                                    )
-                                }
-                                .padding(vertical = 14.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(label, color = if (sel) Ink.onAccent else Ink.tx2,
-                                fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+
+    /* ---------------- 明暗模式选择弹层（Miuix 底部弹层） ---------------- */
+    if (showModeSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showModeSheet = false },
+            containerColor = Ink.card,
+            shape = AppShapes.container(ContainerLevel.Sheet),
+        ) {
+            Column(
+                Modifier.fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp),
+            ) {
+                Text(
+                    "明暗模式",
+                    color = Ink.tx, fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "跟随系统时自动响应系统的深色模式设置",
+                    color = Ink.tx2, fontSize = 12.5.sp,
+                )
+                Spacer(Modifier.height(12.dp))
+                ThemeMode.entries.forEach { m ->
+                    val selected = m == mode
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable {
+                                mode = m
+                                ThemeConfig.setMode(ctx, m)
+                                showModeSheet = false
+                            }
+                            .padding(horizontal = 12.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            m.label,
+                            color = if (selected) Ink.accent else Ink.tx,
+                            fontSize = 16.sp,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (selected) {
+                            Icon(
+                                Icons.Rounded.Check,
+                                contentDescription = "已选",
+                                tint = Ink.accent,
+                                modifier = Modifier.size(20.dp),
+                            )
                         }
                     }
                 }
-                Spacer(Modifier.height(8.dp))
-                Text("切换立即生效，无需重启。", color = Ink.off, fontSize = 10.sp)
             }
         }
-        item {
-            SafeCard(fallbackTitle = "采样") {
-                CardTitle("采样")
-                SettingRow("采样周期", sub = "固定 1s，实时刷新", trailing = {
-                    Row {
-                        Text("1s（固定）", color = Ink.tx2, fontSize = 12.sp,
-                            modifier = Modifier.padding(end = 12.dp))
-                        Text("后台 3s", color = Ink.off, fontSize = 12.sp)
-                    }
-                })
-                // v20.17(P1-11): 两个"规划中"占两行是噪音——折叠成一行，一眼扫过
-                SettingRow("24h 历史", sub = "本地长周期记录 · 规划中", trailing = {
-                    Text("规划中", color = Ink.off, fontSize = 11.sp)
-                })
-            }
+    }
+}
+
+/* ============================================================
+ * 设置页局部组件（Miuix 行语言：16dp 左右内边距 + 标题/副标题两级）
+ * ============================================================ */
+
+/** 两行标题 + 右侧状态徽章（Shizuku / Root 行） */
+@Composable
+private fun StatusBadgeRow(
+    title: String,
+    subtitle: String,
+    badgeColor: Color,
+    badgeText: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                title, color = Ink.tx, fontSize = 16.sp,
+                fontWeight = FontWeight.Normal,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(subtitle, color = Ink.tx2, fontSize = 12.sp, lineHeight = 16.sp)
         }
-        item {
-            SafeCard(fallbackTitle = "数据") {
-                CardTitle("数据")
-                SettingRow("导出快照 CSV", sub = "全部参数（写入 下载/Mio）", trailing = {
-                    ProbeButton(text = "导出", onClick = { exportCsv(vm, ctx) })
-                })
-                SettingRow("传感器总览", sub = "实时通道与全部传感器列表", trailing = {
-                    ProbeButton(text = "查看", onClick = onOpenSensors)
-                })
-                SettingRow("使用引导", sub = "重看首次启动的完整功能说明", trailing = {
-                    ProbeButton(text = "重看", onClick = onShowOnboarding)
-                })
-            }
-        }
-        item {
-            SafeCard(fallbackTitle = "设备信息") {
-                CardTitle("设备信息")
-                // v20.21(P2-16): 读 /proc 移出组合——组合每秒重组，不再反复在主线程读文件
-                var soc by remember { mutableStateOf("–") }
-                var kernel by remember { mutableStateOf("–") }
-                var memInfo by remember { mutableStateOf("–") }
-                var storageInfo by remember { mutableStateOf("–") }
-                // v0.23.0: SoC 平台识别结果（PlatformDetector，进程级缓存）
-                var platformLine by remember { mutableStateOf("–") }
-                var boardPlatform by remember { mutableStateOf("–") }
-                LaunchedEffect(Unit) {
-                    val r = withContext(Dispatchers.IO) {
-                        listOf(readSoc(), readKernel(), readMem(), readStorage())
-                    }
-                    soc = r[0]; kernel = r[1]; memInfo = r[2]; storageInfo = r[3]
-                    // 平台识别在 IO 线程执行（内部 getprop 可能起进程），结果恒定
-                    val p = withContext(Dispatchers.IO) { com.a41probe.monitor.data.PlatformDetector.get() }
-                    platformLine = p.displayLine
-                    boardPlatform = p.boardPlatform ?: "–"
+        Spacer(Modifier.width(10.dp))
+        DotBadge(badgeColor, badgeText)
+    }
+}
+
+/** 配色预设：横排色点 + 选中高亮（沿用 ThemeConfig.set 持久化） */
+@Composable
+private fun PalettePicker(
+    selected: Palette,
+    onSelect: (Palette) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Text("配色预设", color = Ink.tx, fontSize = 16.sp)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "切换全局强调色与页面底色；温度红 / 橙 / 绿等语义色保持不变，避免影响数据判读",
+            color = Ink.tx2, fontSize = 12.sp, lineHeight = 16.sp,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Palettes.ALL.forEach { p ->
+                val sel = p.id == selected.id
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (sel) Ink.accentSoft else Color.Transparent)
+                        .clickable { onSelect(p) }
+                        .padding(vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(
+                        Modifier
+                            .size(26.dp)
+                            .clip(CircleShape)
+                            .background(p.accent)
+                            .border(
+                                width = if (sel) 2.dp else 1.dp,
+                                color = if (sel) Ink.tx else Ink.stroke,
+                                shape = CircleShape,
+                            ),
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        p.label,
+                        color = if (sel) Ink.tx else Ink.tx3,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                    )
                 }
-                // v20.17(P1-11): 静态信息去绿点——色点语义留给"健康/异常"，设备信息不参与
-                StatRow("品牌", "${Build.BRAND} · ${Build.MANUFACTURER}")
-                StatRow("机型", Build.MODEL)
-                StatRow("SoC", soc)
-                StatRow("平台", platformLine)
-                StatRow("Board Platform", boardPlatform)
-                StatRow("系统", "Android ${Build.VERSION.RELEASE} · SDK ${Build.VERSION.SDK_INT}")
-                StatRow("安全补丁", Build.VERSION.SECURITY_PATCH ?: "–")
-                StatRow("内核", kernel)
-                StatRow("内存", memInfo)
-                StatRow("屏幕", readScreen(ctx))
-                StatRow("存储", storageInfo)
             }
         }
-        item {
-            SafeCard(fallbackTitle = "关于") {
-                CardTitle("关于")
-                StatRow("App", "v${BuildConfig.VERSION_NAME} · 纯只读", stateColor = Ink.accent)
-                // v1.3.0: 当前角色（头像随角色预设变化；素材缺失则不画图只留文字）
-                val curSpec = SpecialConfig.current()
-                val curThumb = curSpec.thumbRes()
-                if (curThumb != 0) {
-                    Spacer(Modifier.height(10.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+    }
+}
+
+/** 角色预设：整组切换立绘与配色（素材缺失的角色不会出现在这里） */
+@Composable
+private fun CharacterPicker(
+    selected: SpecialTheme,
+    specials: List<SpecialTheme>,
+    onSelect: (SpecialTheme) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Text("角色预设", color = Ink.tx, fontSize = 16.sp)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "整组切换立绘与配色，与上面的配色预设相互独立——先挑角色，再用配色微调",
+            color = Ink.tx2, fontSize = 12.sp, lineHeight = 16.sp,
+        )
+        Spacer(Modifier.height(8.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            specials.forEach { sp ->
+                val sel = sp.id == selected.id
+                val tint = sp.palette?.accent ?: Ink.accent
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (sel) Ink.accentSoft else Ink.panel)
+                        .then(
+                            if (sel) Modifier.border(1.5.dp, tint, RoundedCornerShape(12.dp))
+                            else Modifier
+                        )
+                        .clickable { onSelect(sp) }
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val th = sp.thumbRes()
+                    if (th != 0) {
                         Image(
-                            painter = painterResource(curThumb),
+                            painter = painterResource(th),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.size(34.dp).clip(CircleShape),
                         )
                         Spacer(Modifier.width(10.dp))
-                        Column {
-                            Text("当前角色", color = Ink.tx2, fontSize = 11.sp)
-                            Text(curSpec.label, color = Ink.tx, fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold)
-                        }
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            sp.label, color = Ink.tx, fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(sp.subtitle, color = Ink.tx2, fontSize = 11.sp)
+                    }
+                    if (sel) {
+                        Text(
+                            "当前", color = tint, fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                     }
                 }
             }
         }
-        item {
-            Text("纯只读 · 缺失项置灰，不显示伪造值",
-                color = Ink.off, fontSize = 10.5.sp,
-                modifier = Modifier.padding(horizontal = 4.dp))
+    }
+}
+
+/** 三档分段设置行（液态玻璃 / 触感强度共用）：Miuix 行 + 分段胶囊 */
+@Composable
+private fun SegmentSetting(
+    title: String,
+    subtitle: String,
+    labels: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    onPressStart: ((Int) -> Unit)? = null,
+    onPressEnd: (() -> Unit)? = null,
+) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Text(title, color = Ink.tx, fontSize = 16.sp)
+        Spacer(Modifier.height(2.dp))
+        Text(subtitle, color = Ink.tx2, fontSize = 12.sp, lineHeight = 16.sp)
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            labels.forEachIndexed { idx, label ->
+                val sel = idx == selectedIndex
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (sel) Ink.accent else Ink.panel)
+                        .pointerInput(idx) {
+                            detectTapGestures(
+                                onPress = {
+                                    onPressStart?.invoke(idx)
+                                    tryAwaitRelease()
+                                    onPressEnd?.invoke()
+                                },
+                                onTap = { onSelect(idx) },
+                            )
+                        }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        label,
+                        color = if (sel) Ink.onAccent else Ink.tx2,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
         }
-        item { Spacer(Modifier.height(4.dp)) }
-    
-    }}
+    }
 }

@@ -61,6 +61,10 @@ val Mono = androidx.compose.ui.text.font.FontFamily.Monospace
 /** 液体玻璃是否可用（Miuix blur 模块 minSdk 33，低版本降级为实色表面） */
 fun liquidGlassSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
 
+/** 玻璃档位 + 系统版本 → 是否启用液态玻璃（纯函数，便于单元测试） */
+internal fun resolveLiquidGlassEnabled(level: GlassLevel, sdkInt: Int): Boolean =
+    level == GlassLevel.FULL && sdkInt >= Build.VERSION_CODES.TIRAMISU
+
 @Composable
 fun MioTheme(
     palette: Palette = ThemeConfig.palette(),
@@ -75,8 +79,7 @@ fun MioTheme(
     val motionScheme = remember { resolveMaterialMotionScheme(AppUiStyle.MIUIX) }
 
     val glassLevel = GlassConfig.effective()
-    val liquidGlassEnabled = glassLevel == GlassLevel.FULL && liquidGlassSupported()
-    val glassAvailable = glassLevel != GlassLevel.OFF
+    val liquidGlassEnabled = resolveLiquidGlassEnabled(glassLevel, Build.VERSION.SDK_INT)
 
     val themeConfig = remember(liquidGlassEnabled) {
         AppThemeConfig(
@@ -112,7 +115,9 @@ fun MioTheme(
                         nativeInteractionColors = false,
                         miuixContentColors = true,
                     ) {
-                        SideEffect { Ink.bind(resolved) }
+                        // 组合期同步绑定颜色快照，避免首帧/换肤瞬间读到旧主题色
+                        // （remember 返回值非 Unit，满足 Compose lint 的 RememberReturnType 规则）
+                        remember(resolved) { Ink.bind(resolved); resolved }
                         AppSystemBars(darkTheme = darkTheme)
                         content()
                     }

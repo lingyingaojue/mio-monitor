@@ -56,6 +56,27 @@ data class MioColors(
 
         private fun Color.mixDark(amount: Float): Color = lerp(this, Color(0xFF1A1A1A), amount)
 
+        /** WCAG 2.1 相对亮度对比度。 */
+        private fun contrastRatio(a: Color, b: Color): Double {
+            fun luminanceOf(c: Color): Double {
+                fun ch(v: Float): Double {
+                    val s = v.toDouble()
+                    return if (s <= 0.03928) s / 12.92 else Math.pow((s + 0.055) / 1.055, 2.4)
+                }
+                return 0.2126 * ch(c.red) + 0.7152 * ch(c.green) + 0.0722 * ch(c.blue)
+            }
+            val la = luminanceOf(a)
+            val lb = luminanceOf(b)
+            return (maxOf(la, lb) + 0.05) / (minOf(la, lb) + 0.05)
+        }
+
+        /** 深色模式下强调色会被提亮：按对比度在白字/深字之间自动取更可读的一个。 */
+        private fun Color.readableOnColor(): Color {
+            val white = Color.White
+            val dark = Color(0xFF101010)
+            return if (contrastRatio(this, white) >= contrastRatio(this, dark)) white else dark
+        }
+
         /** 由 Mio 配色预设 + 明暗模式派生全套颜色。深色表面固定中性色，只让强调色带色温。 */
         fun from(palette: Palette, dark: Boolean): MioColors {
             if (!dark) {
@@ -104,8 +125,8 @@ data class MioColors(
                 off = Color(0xFF707070),
                 accent = darkAccent,
                 accent2 = palette.accent2.lighten(0.1f),
-                onAccent = if (darkAccent.luminance() > 0.55f) Color(0xFF101010) else Color.White,
-                accentSoft = palette.accent.copy(alpha = 0.22f),
+                onAccent = darkAccent.readableOnColor(),
+                accentSoft = darkAccent.copy(alpha = 0.22f),
                 curve = darkAccent,
                 shadowTint = Color.Black,
                 clusterPrime = palette.clusterPrime.lighten(0.22f),

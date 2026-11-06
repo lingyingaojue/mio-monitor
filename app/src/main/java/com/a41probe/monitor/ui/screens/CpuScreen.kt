@@ -1,10 +1,10 @@
 package com.a41probe.monitor.ui.screens
 
-import com.a41probe.monitor.ui.components.MioPageTitle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.a41probe.monitor.data.ClusterRole
@@ -39,21 +39,49 @@ import com.a41probe.monitor.data.CpuReader
 import com.a41probe.monitor.data.MonitorViewModel
 import com.a41probe.monitor.data.Sysfs
 import com.a41probe.monitor.ui.components.AreaLine
-import com.a41probe.monitor.ui.components.AnimatedFracBar
-import com.a41probe.monitor.ui.components.AnimatedNum
-import com.a41probe.monitor.ui.components.CardTitle
-import com.a41probe.monitor.ui.components.NestedTile
-import com.a41probe.monitor.ui.components.SafeCard
-import com.a41probe.monitor.ui.components.Sparkline
-import com.a41probe.monitor.ui.components.StatRow
+import com.a41probe.monitor.ui.components.MioBarRow
+import com.a41probe.monitor.ui.components.MioCard
+import com.a41probe.monitor.ui.components.MioChip
+import com.a41probe.monitor.ui.components.MioInfoRow
+import com.a41probe.monitor.ui.components.MioMetric
+import com.a41probe.monitor.ui.components.MioPageHeader
+import com.a41probe.monitor.ui.components.MultiLine
+import com.a41probe.monitor.ui.components.ScrollAware
 import com.a41probe.monitor.ui.theme.Ink
-import com.a41probe.monitor.ui.theme.Priv
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
-import com.a41probe.monitor.ui.components.ScrollAware
 
-/** CPU：总占用（S）、8 核频率时间线（—）、档位分布（—）、调度与限频 */
+/** 提权小标：R（Root）/ S（Shizuku）——与旧卡头 PrivBadge 同语义 */
+@Composable
+private fun CpuPrivChip(rootActive: Boolean) {
+    if (rootActive) {
+        MioChip("R", color = Ink.warn, mono = true)
+    } else {
+        MioChip("S", color = Ink.accent, mono = true)
+    }
+}
+
+/** 卡片内标题行：左标题 + 右侧说明/动作（BiliPai 卡头语言） */
+@Composable
+private fun CpuCardHead(
+    label: String,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label, color = Ink.tx, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (trailing != null) {
+            Spacer(Modifier.width(8.dp))
+            trailing()
+        }
+    }
+}
+
+/** CPU：总占用（S）、8 核频率（—）、分核占用（S）、档位分布（—）、调度与限频 */
 @Composable
 fun CpuScreen(vm: MonitorViewModel) {
     // v0.28.0: 细粒度订阅——核状态/权限/电池各自独立流
@@ -63,6 +91,7 @@ fun CpuScreen(vm: MonitorViewModel) {
     val cpuTotal by vm.cpuTotalPercent.collectAsState()
     val cpuTotalHist by vm.cpuTotalHist.collectAsState()
     val corePercent by vm.corePercent.collectAsState()
+    // v3.0: 频率历史保留订阅——每核 60s 走势（同簇 DVFS 共享，簇曲线天然重合）
     val hist by vm.freqHist.collectAsState()
 
     // sysfs 读取移出组合阶段：后台线程读一次，避免每秒主线程 IO
@@ -87,191 +116,194 @@ fun CpuScreen(vm: MonitorViewModel) {
         tis = withContext(Dispatchers.IO) { timeInStateFreqs(tisCore) }
     }
 
-        val listState = rememberLazyListState()
+    val inset = Modifier.padding(horizontal = 14.dp)
+    val listState = rememberLazyListState()
     ScrollAware(listState) {
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            MioPageTitle("CPU 核心", "占用 · 频率 · 档位 · 调度")
-        }
-        // 总占用
-        item {
-            SafeCard(fallbackTitle = "总占用") {
-                CardTitle("总占用", Priv.SHIZUKU, rootActive = priv.rootAvailable,
-                    right = { Text("proc/stat 差分", color = Ink.off, fontSize = 10.5.sp) })
-                Spacer(Modifier.height(8.dp))
-                if (cpuTotal != null) {
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        AnimatedNum(cpuTotal!!.toFloat(), { f -> "%.0f".format(f) },
-                            color = Ink.accent, sizeSp = 26)
-                        Text("%", color = Ink.accent, fontSize = 13.sp,
-                            fontFamily = FontFamily.Monospace, modifier = Modifier.padding(bottom = 2.dp))
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(top = 2.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item { MioPageHeader("CPU 核心", "占用 · 频率 · 档位 · 调度") }
+
+            // ① 总占用 hero + 近 60s 曲线
+            item {
+                MioCard(inset) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CpuPrivChip(rootActive = priv.rootAvailable)
+                        Spacer(Modifier.weight(1f))
+                        Text("proc/stat 差分", color = Ink.off, fontSize = 10.5.sp)
                     }
-                } else {
-                    Text("–", color = Ink.off, fontSize = 26.sp,
-                        fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(4.dp))
-                    Text(if (priv.rootAvailable) "Root 读取中…" else "需 Shizuku · 授权后显示总占用",
-                        color = Ink.off, fontSize = 10.5.sp)
-                }
-                Spacer(Modifier.height(10.dp))
-                NestedTile {
-                    AreaLine(cpuTotalHist, color = Ink.accent, height = 84.dp,
+                    Spacer(Modifier.height(10.dp))
+                    MioMetric(
+                        label = "总占用",
+                        value = cpuTotal?.roundToInt()?.toString() ?: "–",
+                        unit = "%",
+                        color = if (cpuTotal == null) Ink.off else Ink.accent,
+                        animated = cpuTotal?.toFloat(),
+                        valueSizeSp = 36,
+                        sub = when {
+                            cpuTotal != null -> null
+                            priv.rootAvailable -> "Root 读取中…"
+                            else -> "需 Shizuku · 授权后显示总占用"
+                        },
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    AreaLine(
+                        cpuTotalHist, color = Ink.accent, height = 84.dp,
                         fixedRange = 100f, axisLabels = listOf("100%", "50%", "0%"),
                         latestLabel = { f -> "${f.roundToInt()}%" },
-                        emptyText = if (priv.rootAvailable) "Root 读取中…" else "需 Shizuku 授权")
+                        emptyText = if (priv.rootAvailable) "Root 读取中…" else "需 Shizuku 授权",
+                    )
                 }
             }
-        }
-        // 核心频率：4×2 网格（编号 + 频率大数字 + 每核独立迷你曲线）
-        item {
-            SafeCard(fallbackTitle = "核心频率") {
-                CardTitle("核心频率", Priv.FREE,
-                    right = { Text("实时 · 60s", color = Ink.off, fontSize = 10.5.sp) })
-                Spacer(Modifier.height(9.dp))
-                val freqRows = cores.indices.chunked(4)
-                freqRows.forEachIndexed { rowIdx, row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        row.forEach { idx ->
-                            Box(Modifier.weight(1f)) {
-                                CoreFreqCell(
-                                    core = cores.getOrNull(idx),
-                                    hist = hist.getOrElse(idx) { emptyList() },
-                                )
-                            }
-                        }
+
+            // ② 核心频率：60s 走势 + 每核 MioBarRow（当前频率 / 簇上限）
+            item {
+                MioCard(inset) {
+                    CpuCardHead("核心频率") {
+                        Text("实时 · 60s", color = Ink.off, fontSize = 10.5.sp)
                     }
-                    if (rowIdx < freqRows.lastIndex) Spacer(Modifier.height(6.dp))
-                }
-                Spacer(Modifier.height(9.dp))
-                ClusterLegend(cores)
-                Spacer(Modifier.height(6.dp))
-                Text("同簇共享频率域（DVFS）· 同簇核心频率始终一致",
-                    color = Ink.off, fontSize = 10.sp)
-            }
-        }
-        // v20: 分核占用（S /proc/stat 差分）
-        item {
-            SafeCard(fallbackTitle = "分核占用") {
-                CardTitle("分核占用", Priv.SHIZUKU, rootActive = priv.rootAvailable,
-                    right = { Text("proc/stat · 实时", color = Ink.off, fontSize = 10.5.sp) })
-                Spacer(Modifier.height(9.dp))
-                if (corePercent.none { it != null }) {
-                    Box(Modifier.fillMaxWidth().height(56.dp), contentAlignment = Alignment.Center) {
-                        Text(if (priv.rootAvailable) "Root 读取中…" else "需 Shizuku · 授权后显示每核占用",
-                            color = Ink.off, fontSize = 11.sp)
-                    }
-                } else {
-                    val busyRows = cores.indices.chunked(4)
-                    busyRows.forEachIndexed { rowIdx, row ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            row.forEach { idx ->
-                                Box(Modifier.weight(1f)) {
-                                    CoreBusyCell(idx = idx, percent = corePercent.getOrNull(idx),
-                                        core = cores.getOrNull(idx))
-                                }
-                            }
+                    if (cores.isNotEmpty()) {
+                        if (hist.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            MultiLine(
+                                hist,
+                                colors = cores.map { clusterColorForRole(it.colorRole) },
+                                height = 56.dp,
+                                strokeW = 1.3f,
+                            )
+                            Spacer(Modifier.height(4.dp))
                         }
-                        if (rowIdx < busyRows.lastIndex) Spacer(Modifier.height(6.dp))
-                    }
-                    Spacer(Modifier.height(9.dp))
-                    ClusterLegend(cores)
-                }
-            }
-        }
-        // 档位分布（A510 time_in_state；频率变化时后台重算）
-        item {
-            if (tis.isNotEmpty()) {
-                SafeCard(fallbackTitle = "频率停留") {
-                    CardTitle("频率停留 · $tisLabel", Priv.FREE)
-                    Spacer(Modifier.height(8.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                        tis.forEach { (freq, frac) ->
-                            val active = freq == cores.getOrNull(tisCore)?.freqMHz
-                            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Box(
-                                    modifier = Modifier.fillMaxWidth().height(36.dp),
-                                    contentAlignment = Alignment.BottomCenter,
-                                ) {
-                                    Box(
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .fillMaxHeight(frac.coerceIn(0.02f, 1f))
-                                            .background(if (active) Ink.accent else Ink.panel)
-                                    )
-                                }
-                                Spacer(Modifier.height(2.dp))
-                                // v20.15: 每档标 MHz——柱子不再是"无字灰条"，当前档蓝色加粗
-                                Text("$freq", color = if (active) Ink.accent else Ink.off,
-                                    fontSize = 8.5.sp, fontFamily = FontFamily.Monospace,
-                                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                                    maxLines = 1)
-                            }
+                        // 归一化基准：优先该核频率上限（scaling_max_freq），缺失退回全场最高频
+                        val maxSeen = (cores.mapNotNull { it.freqMHz }.maxOrNull() ?: 0)
+                            .coerceAtLeast(1)
+                        cores.forEach { core ->
+                            val cap = (core.maxMHz ?: maxSeen).coerceAtLeast(1)
+                            MioBarRow(
+                                name = "C${core.index} · ${core.cluster}",
+                                frac = (core.freqMHz ?: 0).toFloat() / cap,
+                                value = core.freqMHz?.let { "$it MHz" } ?: "–",
+                                barColor = clusterColorForRole(core.colorRole).copy(alpha = 0.85f),
+                                nameWidth = 96.dp,
+                            )
                         }
+                        Spacer(Modifier.height(6.dp))
+                        ClusterLegend(cores)
                     }
                     Spacer(Modifier.height(6.dp))
-                    Text("当前频率蓝色高亮 · 数字为 MHz · 柱高=该频率停留时间占比",
+                    Text("同簇共享频率域（DVFS）· 同簇核心频率始终一致",
                         color = Ink.off, fontSize = 10.sp)
                 }
             }
-        }
-        // 调度与限频
-        item {
-            SafeCard(fallbackTitle = "调度与限频") {
-                CardTitle("调度与限频")
-                StatRow("governor", gov ?: "–", stateColor = Ink.ok, mono = true)
-                // 各簇上限：按簇动态显示 label+"上限"（PRIME→PERF→BAL→EFF 排序），Root 补读真值，未读到置灰
-                val roleOrder = listOf(ClusterRole.PRIME, ClusterRole.PERFORMANCE, ClusterRole.BALANCE, ClusterRole.EFFICIENCY)
-                val clusterInfo = cores.groupBy { it.cluster }.map { (label, cs) ->
-                    Triple(label, cs.mapNotNull { it.maxMHz }.maxOrNull(), cs.first().colorRole)
-                }.sortedBy { roleOrder.indexOf(it.third) }
-                clusterInfo.forEach { (label, maxMhz, _) ->
-                    StatRow("$label 上限", maxMhz?.toString() ?: "–",
-                        unit = "MHz",
-                        stateColor = if (maxMhz != null) Ink.ok else Ink.off, mono = true)
+
+            // ③ 分核占用（S /proc/stat 差分）
+            item {
+                MioCard(inset) {
+                    CpuCardHead("分核占用") {
+                        CpuPrivChip(rootActive = priv.rootAvailable)
+                        Spacer(Modifier.width(8.dp))
+                        Text("proc/stat · 实时", color = Ink.off, fontSize = 10.5.sp)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    if (corePercent.none { it != null }) {
+                        Box(
+                            Modifier.fillMaxWidth().height(56.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                if (priv.rootAvailable) "Root 读取中…"
+                                else "需 Shizuku · 授权后显示每核占用",
+                                color = Ink.off, fontSize = 11.sp,
+                            )
+                        }
+                    } else {
+                        cores.indices.forEach { idx ->
+                            val core = cores.getOrNull(idx)
+                            val pct = corePercent.getOrNull(idx)
+                            MioBarRow(
+                                name = "C$idx" + (core?.cluster?.let { " · $it" } ?: ""),
+                                frac = if (pct != null) pct / 100f else 0f,
+                                value = pct?.let { "$it%" } ?: "–",
+                                barColor = clusterColorForRole(core?.colorRole).copy(alpha = 0.85f),
+                                nameWidth = 96.dp,
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        ClusterLegend(cores)
+                    }
                 }
-                StatRow("降频事件", if (b.isCharging) "限频中（快充）" else "无",
-                    stateColor = if (b.isCharging) Ink.warn else Ink.ok)
-                Spacer(Modifier.height(4.dp))
-                // UX: 空闲核驻留最低档是 cpufreq 正常行为（如 X2 806MHz），消除"频率卡死"误解
-                Text("核心空闲时停在最低频率（如 X2 806MHz），有负载后调度器自动抬频",
-                    color = Ink.off, fontSize = 10.sp, maxLines = 2)
+            }
+
+            // ④ 档位分布（A510 time_in_state；频率变化时后台重算）
+            item {
+                if (tis.isNotEmpty()) {
+                    MioCard(inset) {
+                        CpuCardHead("频率停留 · $tisLabel")
+                        Spacer(Modifier.height(8.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                            tis.forEach { (freq, frac) ->
+                                val active = freq == cores.getOrNull(tisCore)?.freqMHz
+                                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().height(36.dp),
+                                        contentAlignment = Alignment.BottomCenter,
+                                    ) {
+                                        Box(
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .fillMaxHeight(frac.coerceIn(0.02f, 1f))
+                                                .background(if (active) Ink.accent else Ink.panel),
+                                        )
+                                    }
+                                    Spacer(Modifier.height(2.dp))
+                                    // v20.15: 每档标 MHz——柱子不再是"无字灰条"，当前档蓝色加粗
+                                    Text("$freq", color = if (active) Ink.accent else Ink.off,
+                                        fontSize = 8.5.sp, fontFamily = FontFamily.Monospace,
+                                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                                        maxLines = 1)
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text("当前频率蓝色高亮 · 数字为 MHz · 柱高=该频率停留时间占比",
+                            color = Ink.off, fontSize = 10.sp)
+                    }
+                }
+            }
+
+            // ⑤ 调度与限频（MioInfoRow 信息行）
+            item {
+                MioCard(inset) {
+                    CpuCardHead("调度与限频")
+                    Spacer(Modifier.height(2.dp))
+                    MioInfoRow("governor", gov ?: "–", stateColor = Ink.ok, mono = true)
+                    // 各簇上限：按簇动态显示 label+"上限"（PRIME→PERF→BAL→EFF 排序），Root 补读真值，未读到置灰
+                    val roleOrder = listOf(ClusterRole.PRIME, ClusterRole.PERFORMANCE, ClusterRole.BALANCE, ClusterRole.EFFICIENCY)
+                    val clusterInfo = cores.groupBy { it.cluster }.map { (label, cs) ->
+                        Triple(label, cs.mapNotNull { it.maxMHz }.maxOrNull(), cs.first().colorRole)
+                    }.sortedBy { roleOrder.indexOf(it.third) }
+                    clusterInfo.forEach { (label, maxMhz, _) ->
+                        MioInfoRow(
+                            "$label 上限", maxMhz?.toString() ?: "–",
+                            unit = "MHz",
+                            stateColor = if (maxMhz != null) Ink.ok else Ink.off,
+                            mono = true,
+                        )
+                    }
+                    MioInfoRow(
+                        "降频事件", if (b.isCharging) "限频中（快充）" else "无",
+                        stateColor = if (b.isCharging) Ink.warn else Ink.ok,
+                        mono = false,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    // UX: 空闲核驻留最低档是 cpufreq 正常行为（如 X2 806MHz），消除"频率卡死"误解
+                    Text("核心空闲时停在最低频率（如 X2 806MHz），有负载后调度器自动抬频",
+                        color = Ink.off, fontSize = 10.sp, maxLines = 2)
+                }
             }
         }
-        item { Spacer(Modifier.height(4.dp)) }
-    
-    }}
-}
-
-/** 单核占用格：核号 + 簇色百分比 + 水平条（分核占用） */
-@Composable
-private fun CoreBusyCell(idx: Int, percent: Int?, core: CpuCore?) {
-    val color = core?.let { clusterColorForRole(it.colorRole) } ?: Ink.off
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(Ink.panel)
-            .padding(horizontal = 8.dp, vertical = 7.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("C$idx", color = Ink.off, fontSize = 9.5.sp)
-            Spacer(Modifier.weight(1f))
-            Text(percent?.toString()?.plus("%") ?: "–", color = color, fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)
-        }
-        Spacer(Modifier.height(5.dp))
-        // v20.20(P1-7): 接入 AnimatedFracBar——占用条弹簧平滑，与同屏频率条节奏一致
-        // P2-10: 轨道色一并对齐全局 Ink.panel
-        AnimatedFracBar(
-            frac = if (percent != null) (percent / 100f).coerceIn(0f, 1f) else 0f,
-            color = if (percent != null) color.copy(alpha = 0.85f) else Ink.panel,
-            height = 9.dp, corner = 4.dp,
-        )
     }
 }
 
@@ -288,8 +320,6 @@ private fun timeInStateFreqs(core: Int): List<Pair<Int, Float>> {
     return rows.map { (it.first!! / 1000) to (it.second!! / total) }
 }
 
-// ===== 核心频率网格 =====
-
 /** 簇角色色：PRIME 暖橙（最大性能核最醒目）· PERF 蓝 · EFF 青绿 · BAL 紫（统一引用 Ink 令牌） */
 private fun clusterColorForRole(role: ClusterRole?): Color = when (role) {
     ClusterRole.PRIME -> Ink.clusterPrime
@@ -297,35 +327,6 @@ private fun clusterColorForRole(role: ClusterRole?): Color = when (role) {
     ClusterRole.EFFICIENCY -> Ink.clusterEff
     ClusterRole.BALANCE -> Ink.clusterBal
     null -> Ink.accent
-}
-
-/** 单核频率格：编号 + 簇色点 / 频率大数字 / MHz / 该核迷你频率曲线 */
-@Composable
-private fun CoreFreqCell(core: CpuCore?, hist: List<Float>) {
-    val color = core?.let { clusterColorForRole(it.colorRole) } ?: Ink.off
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(Ink.panel)
-            .padding(horizontal = 8.dp, vertical = 7.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("C${core?.index ?: "–"}", color = Ink.off, fontSize = 9.5.sp)
-            Spacer(Modifier.weight(1f))
-            Box(Modifier.size(6.dp).clip(CircleShape).background(color))
-        }
-        Spacer(Modifier.height(3.dp))
-        AnimatedNum(core?.freqMHz?.toFloat(), { f -> "%.0f".format(f) },
-            color = color, sizeSp = 16, weight = FontWeight.SemiBold)
-        Text("MHz", color = Ink.off, fontSize = 8.5.sp)
-        Spacer(Modifier.height(3.dp))
-        // 每核独立迷你曲线：化整为零，不再 8 线叠图
-        Sparkline(
-            hist, color = color, modifier = Modifier.fillMaxWidth(),
-            height = 16.dp, fill = false, strokeW = 1.3f,
-        )
-    }
 }
 
 /** 簇图例：按 snapshot.cores 动态去重，圆点 + 簇名（含核心数），按角色排序 */
