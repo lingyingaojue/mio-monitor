@@ -60,6 +60,7 @@ import com.a41probe.monitor.ui.components.MioSwitchRow
 import com.a41probe.monitor.ui.components.ProbeButton
 import com.a41probe.monitor.ui.components.ScrollAware
 import com.a41probe.monitor.ui.glass.LocalMioChromeInsets
+import com.a41probe.monitor.ui.glass.scaledGlassFillAlpha
 import com.a41probe.monitor.ui.theme.Ink
 
 /**
@@ -453,7 +454,7 @@ private fun GlassDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
-        containerColor = Ink.glassFill.copy(alpha = 0.94f),
+        containerColor = Ink.glassFill.copy(alpha = scaledGlassFillAlpha(0.94f)),
         titleContentColor = Ink.tx,
         textContentColor = Ink.tx2,
         title = { Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Ink.tx) },

@@ -70,6 +70,8 @@ import com.a41probe.monitor.ui.components.BottomBarStyleConfig
 import com.a41probe.monitor.ui.components.DotBadge
 import com.a41probe.monitor.ui.components.GlassConfig
 import com.a41probe.monitor.ui.components.GlassLevel
+import com.a41probe.monitor.ui.components.GlassTransparency
+import com.a41probe.monitor.ui.components.GlassTransparencyConfig
 import com.a41probe.monitor.ui.components.HapticLevel
 import com.a41probe.monitor.ui.components.MioCard
 import com.a41probe.monitor.ui.components.MioChoiceRow
@@ -110,13 +112,20 @@ import kotlinx.coroutines.withContext
  * 业务行为与持久化键完全沿用旧实现：
  *  - ThemeConfig  : 明暗模式 / 配色预设 / 角色立绘开关
  *  - SpecialConfig: 角色预设（整组立绘 + 配色）
- *  - GlassConfig  : 液态玻璃三档
+ *  - GlassConfig  : 液态玻璃三档 + 全局玻璃透明度四档
  *  - MioHaptics   : 触感强度（按住持续震、轻点选中）
  *  - CSV 导出、Shizuku/Root 提权通道、双模式入口、采样/数据/设备信息/关于
  * ============================================================ */
 
 private val GLASS_LEVELS = listOf(GlassLevel.FULL, GlassLevel.LITE, GlassLevel.OFF)
 private val GLASS_LABELS = listOf("完整", "简约", "关闭")
+private val GLASS_TRANSPARENCY_LEVELS = listOf(
+    GlassTransparency.LOW,
+    GlassTransparency.MEDIUM,
+    GlassTransparency.HIGH,
+    GlassTransparency.ULTRA,
+)
+private val GLASS_TRANSPARENCY_LABELS = listOf("低", "中", "高", "极高")
 private val BOTTOM_BAR_STYLES = listOf(BottomBarStyle.BILIPAI, BottomBarStyle.MIO)
 private val BOTTOM_BAR_LABELS = listOf("BiliPai 原版", "Mio 简版")
 private val HAPTIC_LEVELS = listOf(HapticLevel.LIGHT, HapticLevel.MEDIUM, HapticLevel.HEAVY)
@@ -460,6 +469,7 @@ fun SettingsScreen(
     var palSel by remember { mutableStateOf<Palette>(ThemeConfig.palette()) }
     var artwork by remember { mutableStateOf(ThemeConfig.showArtwork()) }
     var glassSel by remember { mutableStateOf(GlassConfig.current()) }
+    var transparencySel by remember { mutableStateOf(GlassTransparencyConfig.current()) }
     var barStyle by remember { mutableStateOf(BottomBarStyleConfig.current()) }
     var hapticSel by remember { mutableStateOf(MioHaptics.current()) }
     var specSel by remember { mutableStateOf<SpecialTheme>(SpecialConfig.current()) }
@@ -544,7 +554,22 @@ fun SettingsScreen(
                                     GlassConfig.set(ctx, GLASS_LEVELS[idx])
                                 },
                             )
-                            // 只读自检行：一眼确认当前实际走的渲染引擎（排查"看起来不像玻璃"最有效）
+                            // v3.6 全局玻璃透明度四档：只缩放玻璃填充 alpha，不改模糊/折射/可读层
+                            SegmentSetting(
+                                title = "玻璃透明度",
+                                subtitle = "低 = 更实、中 = 默认（与旧版一致）、高 / 极高 = 更透；" +
+                                    "仅调整玻璃填充浓度，不影响模糊、折射与文字可读层；液态玻璃关闭时不生效",
+                                labels = GLASS_TRANSPARENCY_LABELS,
+                                selectedIndex = GLASS_TRANSPARENCY_LEVELS
+                                    .indexOf(transparencySel).coerceAtLeast(0),
+                                onSelect = { idx ->
+                                    transparencySel = GLASS_TRANSPARENCY_LEVELS[idx]
+                                    GlassTransparencyConfig.set(
+                                        ctx,
+                                        GLASS_TRANSPARENCY_LEVELS[idx],
+                                    )
+                                },
+                            )                            // 只读自检行：一眼确认当前实际走的渲染引擎（排查"看起来不像玻璃"最有效）
                             MioSettingRow(
                                 title = "玻璃引擎",
                                 value = liquidEngineLabel(

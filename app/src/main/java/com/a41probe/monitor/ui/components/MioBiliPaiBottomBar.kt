@@ -10,10 +10,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.a41probe.monitor.ui.glass.LocalMioChromeBackdrop
+import com.a41probe.monitor.ui.glass.scaleGlassAlpha
 import com.a41probe.monitor.ui.theme.Ink
 import com.android.purebilibili.feature.home.components.FloatingBottomBar
 import com.android.purebilibili.feature.home.components.FloatingBottomBarColors
 import com.android.purebilibili.feature.home.components.FloatingBottomBarItem
+import com.android.purebilibili.feature.home.components.LiquidGlassTuning
 import com.android.purebilibili.feature.home.components.FloatingBottomBarMode
 import com.android.purebilibili.feature.home.components.LocalFloatingBottomBarContentColor
 import com.android.purebilibili.feature.home.components.resolveLiquidGlassTuning
@@ -56,7 +58,10 @@ fun MioBiliPaiBottomBar(
             shellHeight = 56.dp,
             indicatorHeight = 56.dp,
             contentHorizontalPadding = 12.dp,
-            liquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f),
+            liquidGlassTuning = scaleBottomBarTuning(
+                resolveLiquidGlassTuning(progress = 0.5f),
+                GlassTransparencyConfig.current(),
+            ),
         ) {
             items.forEachIndexed { index, item ->
                 FloatingBottomBarItem(
@@ -75,3 +80,14 @@ fun MioBiliPaiBottomBar(
         }
     }
 }
+/**
+ * v3.6 全局玻璃透明度：只缩放 BiliPai 壳体的 surfaceAlpha / 白色叠加，
+ * 可读性 scrim 与指示器 tint 保持原值，避免文字对比度下降。
+ */
+internal fun scaleBottomBarTuning(
+    tuning: LiquidGlassTuning,
+    level: GlassTransparency,
+): LiquidGlassTuning = tuning.copy(
+    surfaceAlpha = scaleGlassAlpha(tuning.surfaceAlpha, level, floor = 0.10f, ceiling = 0.85f),
+    whiteOverlayAlpha = scaleGlassAlpha(tuning.whiteOverlayAlpha, level, floor = 0f, ceiling = 0.50f),
+)

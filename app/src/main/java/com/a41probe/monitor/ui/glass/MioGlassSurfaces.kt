@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.a41probe.monitor.ui.components.GlassTransparencyConfig
 import com.a41probe.monitor.ui.theme.Ink
 import com.android.purebilibili.core.ui.blur.ChromeBackdropSource
 import com.android.purebilibili.core.ui.effect.lens
@@ -82,6 +83,8 @@ fun MioGlassSurface(
     val host = LocalMioGlass.current
     val capability = currentGlassCapability()
     val dark = Ink.bg.luminance() < 0.5f
+    // v3.6：全局玻璃透明度（Compose state，切换后所有玻璃表面即时重组）
+    val transparency = GlassTransparencyConfig.current()
     val liquidSource = LocalMioChromeBackdrop.current
     // 覆盖层卡片（引导页）：采样内容背板而不是背景层
     val isOverlayCard = role == MioGlassRole.CARD && sampling == MioGlassSampling.CHROME
@@ -90,11 +93,17 @@ fun MioGlassSurface(
     val chromeLiquidMode = liquidSource != null && role != MioGlassRole.SHEET &&
         (role != MioGlassRole.CARD || isOverlayCard)
     // 液态材质两端值：CHROME 在 draw 阶段按滚动进度插值，其余角色两端相同
-    val liquidTuningFull = remember(role, capability, dark, isOverlayCard) {
-        resolveMioLiquidTuning(role, capability, dark, progress = 1f, overlay = isOverlayCard)
+    val liquidTuningFull = remember(role, capability, dark, isOverlayCard, transparency) {
+        applyMioLiquidTransparency(
+            resolveMioLiquidTuning(role, capability, dark, progress = 1f, overlay = isOverlayCard),
+            transparency,
+        )
     }
-    val liquidTuningRest = remember(role, capability, dark, isOverlayCard) {
-        resolveMioLiquidTuning(role, capability, dark, progress = 0f, overlay = isOverlayCard)
+    val liquidTuningRest = remember(role, capability, dark, isOverlayCard, transparency) {
+        applyMioLiquidTransparency(
+            resolveMioLiquidTuning(role, capability, dark, progress = 0f, overlay = isOverlayCard),
+            transparency,
+        )
     }
     // 首帧/换屏时 backdrop 尚未录制完成：先走 tint 降级，isReady 变 true 后自动重组为液态
     val liquidReady = liquidSource?.isReady == true && liquidTuningFull.available
@@ -119,8 +128,8 @@ fun MioGlassSurface(
     val baseGeometry = remember(role, capability, dark, strength) {
         resolveGlassGeometry(role, capability, dark, strength)
     }
-    val geometry = remember(baseGeometry, effectiveProgress) {
-        if (effectiveProgress == null) {
+    val geometry = remember(baseGeometry, effectiveProgress, transparency, capability.enabled) {
+        val ramped = if (effectiveProgress == null) {
             baseGeometry
         } else {
             baseGeometry.copy(
@@ -128,6 +137,7 @@ fun MioGlassSurface(
                 fillAlpha = resolveChromeFillAlpha(baseGeometry.fillAlpha, effectiveProgress),
             )
         }
+        applyGlassGeometryTransparency(ramped, transparency, enabled = capability.enabled)
     }
     // 有色玻璃：把主题强调色按 tintMix 混进白/深底；INDICATOR 直接用强调色
     val tintColor = if (role == MioGlassRole.INDICATOR) {

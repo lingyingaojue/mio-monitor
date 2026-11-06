@@ -64,6 +64,7 @@ import com.a41probe.monitor.ui.glass.LocalMioChromeBackdrop
 import com.a41probe.monitor.ui.glass.LocalMioGlass
 import com.a41probe.monitor.ui.glass.MioGlassRole
 import com.a41probe.monitor.ui.glass.MioGlassSurface
+import com.a41probe.monitor.ui.glass.scaledGlassFillAlpha
 import com.a41probe.monitor.ui.glass.TopBarHeight
 import com.a41probe.monitor.ui.glass.mioGlassGloss
 import com.a41probe.monitor.ui.theme.Ink
@@ -192,7 +193,7 @@ fun MioTopBar(
                     modifier = Modifier
                         .size(38.dp)
                         .clip(CircleShape)
-                        .background(Ink.glassFill.copy(alpha = 0.34f))
+                        .background(Ink.glassFill.copy(alpha = scaledGlassFillAlpha(0.34f)))
                         .mioGlassGloss(CircleShape, lightAlpha = 0.5f, sheenAlpha = 0.10f),
                     contentAlignment = Alignment.Center,
                 ) {

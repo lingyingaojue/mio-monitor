@@ -4,6 +4,7 @@ import android.app.Application
 import com.a41probe.monitor.data.toolbox.ToolboxConfig
 import com.a41probe.monitor.ui.components.BottomBarStyleConfig
 import com.a41probe.monitor.ui.components.GlassConfig
+import com.a41probe.monitor.ui.components.GlassTransparencyConfig
 import com.a41probe.monitor.ui.components.MioHaptics
 import com.a41probe.monitor.ui.theme.SpecialConfig
 import com.a41probe.monitor.ui.theme.ThemeConfig
@@ -18,6 +19,8 @@ class MioApp : Application() {
         CrashCatcher.install(this)
         // v0.28.3: 玻璃档位在进程最早期加载（SharedPreferences），UI 首帧即生效
         GlassConfig.init(this)
+        // v3.6: 全局玻璃透明度四档（默认中 = 3.5 外观）
+        GlassTransparencyConfig.init(this)
         // v3.4: 底部导航栏实现（BiliPai 原版 / Mio 简版），首帧即生效
         BottomBarStyleConfig.init(this)
         // v3.5: OriginOS 调校配置（默认全关）

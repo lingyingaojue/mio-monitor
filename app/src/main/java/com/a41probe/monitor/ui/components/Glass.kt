@@ -73,6 +73,39 @@ object GlassConfig {
     fun effective(): GlassLevel = levelState.value
 }
 
+/** 全局玻璃透明度档位（v3.6）：只影响玻璃填充 alpha，不影响模糊/折射/可读性 scrim。 */
+enum class GlassTransparency { LOW, MEDIUM, HIGH, ULTRA }
+
+/** 全局玻璃透明度配置（与玻璃档位共用 `mio_glass` prefs；默认中 = 3.5 当前外观）。 */
+object GlassTransparencyConfig {
+    private const val PREFS = "mio_glass"
+    private const val KEY_TRANSPARENCY = "glass_transparency"
+
+    private val transparencyState = mutableStateOf(GlassTransparency.MEDIUM)
+
+    fun init(ctx: Context) {
+        transparencyState.value = try {
+            val ordinal = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getInt(KEY_TRANSPARENCY, GlassTransparency.MEDIUM.ordinal)
+            GlassTransparency.entries.firstOrNull { it.ordinal == ordinal }
+                ?: GlassTransparency.MEDIUM
+        } catch (_: Exception) {
+            GlassTransparency.MEDIUM
+        }
+    }
+
+    fun current(): GlassTransparency = transparencyState.value
+
+    fun set(ctx: Context, level: GlassTransparency) {
+        transparencyState.value = level
+        try {
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putInt(KEY_TRANSPARENCY, level.ordinal).apply()
+        } catch (_: Exception) {
+        }
+    }
+}
+
 /** 底部导航栏实现选择（v3.4：默认直接使用 BiliPai 原版 FloatingBottomBar）。 */
 enum class BottomBarStyle { BILIPAI, MIO }
 

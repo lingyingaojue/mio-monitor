@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import com.a41probe.monitor.ui.glass.MioGlassRole
 import com.a41probe.monitor.ui.glass.MioGlassSampling
 import com.a41probe.monitor.ui.glass.MioGlassSurface
+import com.a41probe.monitor.ui.glass.scaledGlassFillAlpha
 import com.a41probe.monitor.ui.theme.Ink
 import com.a41probe.monitor.ui.theme.SpecialConfig
 import com.a41probe.monitor.ui.theme.artKeyResolve
@@ -128,7 +129,7 @@ fun OnboardingOverlay(pages: List<OnboardingPage>, onFinish: () -> Unit) {
                                 .fillMaxWidth()
                                 .height(206.dp)
                                 .clip(artShape)
-                                .background(Ink.glassFill.copy(alpha = 0.18f)),
+                                .background(Ink.glassFill.copy(alpha = scaledGlassFillAlpha(0.18f))),
                             contentAlignment = Alignment.Center,
                         ) {
                             // 素材缺失（角色图不随仓库分发）时跳过绘制，避免 painterResource(0) 崩溃
