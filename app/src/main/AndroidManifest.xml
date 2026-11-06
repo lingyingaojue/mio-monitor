@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Mio 3.0: Miuix 的 blur 模块（液态玻璃材质）自身声明 minSdk 33。
+         Mio 保留 Android 8.0（minSdk 26）支持：液态玻璃仅在 API 33+ 启用，
+         低版本由主题层强制 liquidGlassEnabled=false 走非模糊的 Miuix 实色表面
+         （见 ui/theme/MioTheme.kt 的 liquidGlassSupported 判断）。 -->
+    <uses-sdk tools:overrideLibrary="top.yukonga.miuix.kmp.blur" />
 
     <!-- O20: minSdk=26（API 23+），只需运行时权限模型 API_V23；API 为 pre-23 旧权限，删除 -->
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />

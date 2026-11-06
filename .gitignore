@@ -12,6 +12,8 @@
 # Build outputs
 /build/
 /app/build/
+/design-system/build/
+/design-tokens/build/
 *.apk
 *.aab
 *.ap_
