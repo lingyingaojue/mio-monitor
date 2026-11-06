@@ -10,10 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -47,13 +45,14 @@ import com.a41probe.monitor.data.remote.RemoteSnapshot
 import com.a41probe.monitor.ui.components.MioBarRow
 import com.a41probe.monitor.ui.components.MioCard
 import com.a41probe.monitor.ui.components.MioInfoRow
-import com.a41probe.monitor.ui.components.MioPageTopBar
+import com.a41probe.monitor.ui.components.MioPageScaffold
 import com.a41probe.monitor.ui.components.ProbeButton
 import com.a41probe.monitor.ui.components.ScrollAware
 import com.a41probe.monitor.ui.components.SpecialFace
+import com.a41probe.monitor.ui.glass.LocalMioChromeInsets
 import com.a41probe.monitor.ui.theme.Ink
-import com.android.purebilibili.core.ui.AppShapes
-import com.android.purebilibili.core.ui.ContainerLevel
+import com.a41probe.monitor.ui.glass.currentGlassCapability
+import com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect
 import com.android.purebilibili.core.ui.components.AppTextField
 
 /* ============================================================
@@ -76,15 +75,16 @@ fun MonitorScreen(
     var showAdd by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
-    Column(Modifier.fillMaxWidth().statusBarsPadding()) {
-        MioPageTopBar(title = "监控端", onBack = onBack)
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+    MioPageScaffold(title = "监控端", onBack = onBack) {
+        val chrome = LocalMioChromeInsets.current
+        Box(Modifier.fillMaxSize()) {
             ScrollAware(listState) {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+                    modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
-                        start = 16.dp, end = 16.dp, top = 2.dp, bottom = 20.dp,
+                        start = 16.dp, end = 16.dp,
+                        top = 2.dp + chrome.top, bottom = 20.dp + chrome.bottom,
                     ),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
@@ -384,7 +384,7 @@ private fun StateDot(state: ConnState) {
     Box(Modifier.size(9.dp).clip(CircleShape).background(c))
 }
 
-/** 添加设备弹窗（Miuix 风格：M3 AlertDialog + 语义化弹窗圆角 + Miuix 输入框） */
+/** 添加设备弹窗（v3.1 液态玻璃：透明窗口 + 弹窗背后模糊 + 玻璃材质底） */
 @Composable
 private fun AddDeviceDialog(
     onDismiss: () -> Unit,
@@ -392,13 +392,17 @@ private fun AddDeviceDialog(
 ) {
     var host by remember { mutableStateOf("") }
     var port by remember { mutableStateOf("") }
+    val cap = currentGlassCapability()
+    val dialogShape = RoundedCornerShape(32.dp)
     AlertDialog(
         onDismissRequest = onDismiss,
-        shape = AppShapes.container(ContainerLevel.Dialog),
-        containerColor = Ink.card,
+        shape = dialogShape,
+        containerColor = Ink.glassFill.copy(alpha = 0.82f),
         titleContentColor = Ink.tx,
         textContentColor = Ink.tx2,
         title = {
+            // 弹窗背后内容实时模糊（API 31+；低版本自动 no-op，退回半透明材质）
+            ModalWindowBlurBehindEffect(enabled = cap.realtimeBlur, radius = 24.dp)
             Text(
                 "手动添加设备", fontSize = 19.sp,
                 fontWeight = FontWeight.SemiBold, color = Ink.tx,

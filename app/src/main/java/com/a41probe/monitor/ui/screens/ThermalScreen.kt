@@ -44,6 +44,7 @@ import com.a41probe.monitor.ui.components.ScrollAware
 import com.a41probe.monitor.ui.components.pressClick
 import com.a41probe.monitor.ui.components.tempColor
 import com.a41probe.monitor.ui.components.tempFrac
+import com.a41probe.monitor.ui.glass.LocalMioChromeInsets
 import com.a41probe.monitor.ui.theme.Ink
 import kotlin.math.roundToInt
 
@@ -159,6 +160,10 @@ fun ThermalScreen(vm: MonitorViewModel) {
     val halTemps by vm.halFlow.collectAsState()
     val status by vm.thermalStatusFlow.collectAsState()
     val thresholds by vm.thresholdsFlow.collectAsState()
+
+    // v3.1 液态玻璃：内容从玻璃顶栏/dock 下方穿过，LazyColumn 用壳层 insets 避让首末项
+    val chrome = LocalMioChromeInsets.current
+
     val avg = all.mapNotNull { it.tempC }.filter { it > 0 }
         .let { if (it.isEmpty()) null else it.sum() / it.size }
 
@@ -168,7 +173,7 @@ fun ThermalScreen(vm: MonitorViewModel) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(top = 2.dp, bottom = 20.dp),
+            contentPadding = PaddingValues(top = 2.dp + chrome.top, bottom = 20.dp + chrome.bottom),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { MioPageHeader("温度", "结温 · 外壳 · 84 区热区") }

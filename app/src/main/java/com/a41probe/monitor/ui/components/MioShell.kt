@@ -1,19 +1,20 @@
 package com.a41probe.monitor.ui.components
 
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,7 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,8 +38,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -46,6 +48,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.a41probe.monitor.ui.glass.DockBottomGap
+import com.a41probe.monitor.ui.glass.DockHeight
+import com.a41probe.monitor.ui.glass.DockTopGap
+import com.a41probe.monitor.ui.glass.LocalMioGlass
+import com.a41probe.monitor.ui.glass.MioGlassRole
+import com.a41probe.monitor.ui.glass.MioGlassSurface
+import com.a41probe.monitor.ui.glass.TopBarHeight
+import com.a41probe.monitor.ui.glass.mioGlassGloss
 import com.a41probe.monitor.ui.theme.Ink
 import kotlinx.coroutines.delay
 
@@ -53,8 +63,9 @@ import kotlinx.coroutines.delay
 data class MioTabItem(val label: String, val icon: ImageVector)
 
 /**
- * 主 tab 顶栏（BiliPai 首页式）：
- * 品牌 + 机型 + 提权/新鲜度 chips + 设置齿轮；滚动时底部细线渐入。
+ * 主 tab 顶栏（v3.1 真玻璃）：
+ * 悬浮在内容之上，内容从状态栏下方穿过；滚动时模糊/着色逐渐增强（progress 0→1）。
+ * 结构：品牌 + 机型 + 提权/新鲜度 chips + 设置齿轮。
  */
 @Composable
 fun MioTopBar(
@@ -65,8 +76,12 @@ fun MioTopBar(
     lastSuccessAt: Long,
     onStatusClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    // 顶栏底色与页面一致（内容在 Column 布局中从其下方开始，无需透明渐变）
+    val host = LocalMioGlass.current
+    val progress = host?.chromeProgress ?: 0f
+    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -78,17 +93,29 @@ fun MioTopBar(
     val fresh = ageMs < 3000
     val animScale = rememberAnimatorScale()
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Ink.bg)
-            .statusBarsPadding()
-            .height(58.dp),
+    MioGlassSurface(
+        modifier = modifier.fillMaxWidth().height(statusTop + TopBarHeight),
+        shape = RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp),
+        role = MioGlassRole.CHROME,
+        progress = progress,
     ) {
+        // 状态栏区域保护：玻璃之上再压一层向下渐隐的底色，确保状态栏图标可读
+        Box(
+            Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(statusTop)
+                .background(
+                    Brush.verticalGradient(
+                        0f to Ink.bg.copy(alpha = 0.55f),
+                        1f to Color.Transparent,
+                    ),
+                ),
+        )
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp),
+                .padding(top = statusTop, start = 16.dp, end = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -122,13 +149,13 @@ fun MioTopBar(
                 }
                 val stale = !fresh && ageMs != Long.MAX_VALUE && ageMs > 10_000
                 val badgeAlpha = if (stale && animScale > 0f) {
-                    val tr = androidx.compose.animation.core.rememberInfiniteTransition(label = "staleTop")
+                    val tr = rememberInfiniteTransition(label = "staleTop")
                     tr.animateFloat(
                         initialValue = 0.45f,
                         targetValue = 1f,
-                        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                        animationSpec = infiniteRepeatable(
                             tween(durationMillis = 600),
-                            androidx.compose.animation.core.RepeatMode.Reverse,
+                            RepeatMode.Reverse,
                         ),
                         label = "blinkTop",
                     ).value
@@ -143,8 +170,8 @@ fun MioTopBar(
                     alpha = badgeAlpha,
                 )
             }
-            Spacer(Modifier.width(10.dp))
-            // 设置：48dp 触控目标内放 40dp 圆形齿轮按钮（BiliPai 首页右上角入口）
+            Spacer(Modifier.width(8.dp))
+            // 玻璃圆形齿轮（内层玻璃-lite：不再嵌套第二层模糊）
             Box(
                 modifier = Modifier
                     .size(48.dp)
@@ -153,9 +180,10 @@ fun MioTopBar(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(38.dp)
                         .clip(CircleShape)
-                        .background(Ink.panel),
+                        .background(Ink.glassFill.copy(alpha = 0.34f))
+                        .mioGlassGloss(CircleShape, lightAlpha = 0.5f, sheenAlpha = 0.10f),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -171,15 +199,15 @@ fun MioTopBar(
 }
 
 /**
- * 底部悬浮导航 dock（BiliPai 液态玻璃底栏的实心降级版）：
- * 66dp 高、32dp 大圆角、悬浮阴影、选中项胶囊高亮 + 液态指示器滑动。
- * API 33+ 且玻璃开启时视觉上更透，但无需 Miuix blur 依赖即可稳定工作。
+ * 底部悬浮玻璃 dock（v3.1 真玻璃）：
+ * 内容从 dock 下方滚过并被实时模糊；选中项为玻璃胶囊 + 液态指示器滑动。
  */
 @Composable
 fun MioBottomDock(
     items: List<MioTabItem>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     if (items.isEmpty()) return
     val animScale = rememberAnimatorScale()
@@ -192,67 +220,60 @@ fun MioBottomDock(
         ),
         label = "dockIndicator",
     )
-    val shape = RoundedCornerShape(33.dp)
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp),
+            .padding(start = 16.dp, end = 16.dp, top = DockTopGap, bottom = DockBottomGap),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(66.dp)
-                .shadow(
-                    elevation = 16.dp,
-                    shape = shape,
-                    clip = false,
-                    ambientColor = Ink.shadowTint.copy(alpha = 0.14f),
-                    spotColor = Ink.shadowTint.copy(alpha = 0.12f),
-                )
-                .clip(shape)
-                .background(Ink.card.copy(alpha = 0.94f))
-                .border(1.dp, Ink.stroke.copy(alpha = 0.7f), shape),
+        MioGlassSurface(
+            modifier = Modifier.fillMaxWidth().height(DockHeight),
+            shape = RoundedCornerShape(33.dp),
+            role = MioGlassRole.DOCK,
         ) {
-            // 液态指示器：随选中项平滑滑动
-            val frac = 1f / items.size
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(frac)
-                    .graphicsLayer { translationX = pos * size.width }
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(25.dp))
-                    .background(Ink.accentSoft),
-            )
-            Row(Modifier.fillMaxSize()) {
-                items.forEachIndexed { i, item ->
-                    val active = i == selectedIndex
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable {
-                                if (i != selectedIndex) haptics.tick()
-                                onSelect(i)
-                            },
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Icon(
-                            item.icon,
-                            contentDescription = item.label,
-                            tint = if (active) Ink.accent else Ink.off,
-                            modifier = Modifier.size(21.dp),
-                        )
-                        Spacer(Modifier.height(3.dp))
-                        Text(
-                            item.label,
-                            color = if (active) Ink.accent else Ink.off,
-                            fontSize = 10.5.sp,
-                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                            maxLines = 1,
-                        )
+            Box(Modifier.fillMaxSize()) {
+                // 选中胶囊：主题色半透明玻璃 + 高光边（不嵌套模糊，避免 dock 内二次采样）
+                val frac = 1f / items.size
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(frac)
+                        .graphicsLayer { translationX = pos * size.width }
+                        .padding(horizontal = 8.dp, vertical = 8.dp)
+                        .clip(RoundedCornerShape(25.dp))
+                        .background(Ink.accent.copy(alpha = 0.20f))
+                        .mioGlassGloss(RoundedCornerShape(25.dp), lightAlpha = 0.32f, sheenAlpha = 0.10f),
+                )
+                Row(Modifier.fillMaxSize()) {
+                    items.forEachIndexed { i, item ->
+                        val active = i == selectedIndex
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clickable {
+                                    if (i != selectedIndex) haptics.tick()
+                                    onSelect(i)
+                                },
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Icon(
+                                item.icon,
+                                contentDescription = item.label,
+                                tint = if (active) Ink.accent else Ink.off,
+                                modifier = Modifier.size(21.dp),
+                            )
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                item.label,
+                                color = if (active) Ink.accent else Ink.off,
+                                fontSize = 10.5.sp,
+                                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                                maxLines = 1,
+                                modifier = Modifier.alpha(1f),
+                            )
+                        }
                     }
                 }
             }

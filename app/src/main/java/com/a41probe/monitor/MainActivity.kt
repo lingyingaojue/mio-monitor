@@ -17,24 +17,34 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BatteryFull
+import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.Memory
+import androidx.compose.material.icons.rounded.Thermostat
+import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -47,13 +57,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -74,6 +85,19 @@ import com.a41probe.monitor.ui.components.KEY_ONBOARD_DONE
 import com.a41probe.monitor.ui.components.MIO_PREFS
 import com.a41probe.monitor.ui.components.mioOnboardingPages
 import com.a41probe.monitor.ui.components.rememberAnimatorScale
+import com.a41probe.monitor.ui.glass.DockBottomGap
+import com.a41probe.monitor.ui.glass.DockHeight
+import com.a41probe.monitor.ui.glass.DockTopGap
+import com.a41probe.monitor.ui.glass.LocalMioChromeInsets
+import com.a41probe.monitor.ui.glass.MioAmbientBackground
+import com.a41probe.monitor.ui.glass.MioBackdropLayer
+import com.a41probe.monitor.ui.glass.MioChromeContent
+import com.a41probe.monitor.ui.glass.MioChromeInsets
+import com.a41probe.monitor.ui.glass.MioGlassHost
+import com.a41probe.monitor.ui.glass.MioGlassRole
+import com.a41probe.monitor.ui.glass.MioGlassSheetSurface
+import com.a41probe.monitor.ui.glass.TopBarHeight
+import com.a41probe.monitor.ui.glass.currentGlassCapability
 import com.a41probe.monitor.ui.screens.AgentScreen
 import com.a41probe.monitor.ui.screens.BatteryScreen
 import com.a41probe.monitor.ui.screens.CpuScreen
@@ -88,14 +112,7 @@ import com.a41probe.monitor.ui.theme.Ink
 import com.a41probe.monitor.ui.theme.MioTheme
 import com.a41probe.monitor.ui.theme.SpecialConfig
 import com.a41probe.monitor.ui.theme.ThemeConfig
-import com.android.purebilibili.core.ui.AppShapes
-import com.android.purebilibili.core.ui.ContainerLevel
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.BatteryFull
-import androidx.compose.material.icons.rounded.Dashboard
-import androidx.compose.material.icons.rounded.Memory
-import androidx.compose.material.icons.rounded.Thermostat
-import androidx.compose.material.icons.rounded.Videocam
+import com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect
 import kotlinx.coroutines.delay
 
 enum class Screen(val label: String) {
@@ -143,7 +160,10 @@ class MainActivity : ComponentActivity() {
                 palette = ThemeConfig.palette(),
                 darkTheme = ThemeConfig.isDark(),
             ) {
-                MainScreen()
+                // v3.1 液态玻璃宿主：背景层 + 内容层两个 Haze 源
+                MioGlassHost {
+                    MainScreen()
+                }
             }
         }
     }
@@ -223,26 +243,40 @@ fun MainScreen(vm: MonitorViewModel = viewModel()) {
     }
 
     val special = SpecialConfig.current()
+    val capability = currentGlassCapability()
+
+    // 壳层占位：tab 页让出「状态栏+顶栏」「导航栏+dock」；整页让出「状态栏+返回条」「导航栏+安全区」
+    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val tabInsets = remember(statusTop, navBottom) {
+        MioChromeInsets(
+            top = statusTop + TopBarHeight + 4.dp,
+            bottom = navBottom + DockHeight + DockTopGap + DockBottomGap + 12.dp,
+        )
+    }
+    val pageInsets = remember(statusTop, navBottom) {
+        MioChromeInsets(top = statusTop + TopBarHeight + 4.dp, bottom = navBottom + 24.dp)
+    }
+
     Box(Modifier.fillMaxSize().background(Ink.bg)) {
-        Column(Modifier.fillMaxSize()) {
-            if (isTab) {
-                MioTopBar(
-                    model = Build.MODEL,
-                    authorized = priv.shizukuActive,
-                    serviceUp = priv.shizukuServiceUp,
-                    rootAvailable = priv.rootAvailable,
-                    lastSuccessAt = lastAt,
-                    onStatusClick = { showShizuku = true },
-                    onSettingsClick = {
-                        settingsReturn = screen
-                        screen = Screen.SET
-                    },
+        // 内容层（Haze 源 2）同时包住背景层与各屏内容：
+        // 这样顶栏/dock 采样到的是「背景 + 内容」的完整合成，不会因为屏幕透明背景而糊了个空。
+        MioChromeContent(Modifier.fillMaxSize()) {
+            // 1) 背景层（Haze 源 1）：页面底色 + 环境光 + 角色立绘 —— 供内容卡片采样
+            MioBackdropLayer(Modifier.fillMaxSize()) {
+                MioAmbientBackground(
+                    enabled = capability.enabled,
+                    modifier = Modifier.fillMaxSize(),
                 )
-            }
-            Box(Modifier.weight(1f).fillMaxWidth()) {
                 if (isTab && ThemeConfig.showArtwork()) {
                     MioArtBackground(special.artFor(artKeyFor(screen)))
                 }
+            }
+
+            // 2) 各屏内容：铺满全屏，从顶栏/底栏下方穿过（靠 LocalMioChromeInsets 避让）
+            CompositionLocalProvider(
+                LocalMioChromeInsets provides if (isTab) tabInsets else pageInsets,
+            ) {
                 val tabScale = rememberAnimatorScale()
                 val tabDur = if (tabScale > 0f) 150 else 0
                 AnimatedContent(
@@ -283,35 +317,63 @@ fun MainScreen(vm: MonitorViewModel = viewModel()) {
                     }
                 }
             }
-            if (isTab) {
-                MioBottomDock(
-                    items = tabItems(),
-                    selectedIndex = MAIN_TAB_SCREENS.indexOf(screen).coerceAtLeast(0),
-                    onSelect = { idx -> screen = MAIN_TAB_SCREENS.getOrElse(idx) { Screen.DASH } },
-                )
-            }
         }
 
+        // 3) 玻璃壳层：顶栏 / 底部 dock（叠在内容之上，实时模糊其下的滚动内容）
+        if (isTab) {
+            MioTopBar(
+                model = Build.MODEL,
+                authorized = priv.shizukuActive,
+                serviceUp = priv.shizukuServiceUp,
+                rootAvailable = priv.rootAvailable,
+                lastSuccessAt = lastAt,
+                onStatusClick = { showShizuku = true },
+                onSettingsClick = {
+                    settingsReturn = screen
+                    screen = Screen.SET
+                },
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+            MioBottomDock(
+                items = tabItems(),
+                selectedIndex = MAIN_TAB_SCREENS.indexOf(screen).coerceAtLeast(0),
+                onSelect = { idx -> screen = MAIN_TAB_SCREENS.getOrElse(idx) { Screen.DASH } },
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
+
+        // 4) 提权说明：玻璃弹层 + 弹窗背后内容模糊（API 31+）
         if (showShizuku) {
             ModalBottomSheet(
                 onDismissRequest = { showShizuku = false },
-                containerColor = Ink.card,
-                shape = AppShapes.container(ContainerLevel.Sheet),
+                containerColor = Color.Transparent,
+                scrimColor = Color.Black.copy(alpha = 0.18f),
+                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                dragHandle = null,
             ) {
-                PrivGuideSheet(
-                    serviceUp = priv.shizukuServiceUp,
-                    authorized = priv.shizukuActive,
-                    rootAvailable = priv.rootAvailable,
-                    onGoSettings = {
-                        settingsReturn = if (screen in MAIN_TABS) screen else Screen.DASH
-                        screen = Screen.SET
-                        showShizuku = false
-                    },
+                ModalWindowBlurBehindEffect(
+                    enabled = capability.realtimeBlur,
+                    radius = 28.dp,
                 )
+                MioGlassSheetSurface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                ) {
+                    PrivGuideSheet(
+                        serviceUp = priv.shizukuServiceUp,
+                        authorized = priv.shizukuActive,
+                        rootAvailable = priv.rootAvailable,
+                        onGoSettings = {
+                            settingsReturn = if (screen in MAIN_TABS) screen else Screen.DASH
+                            screen = Screen.SET
+                            showShizuku = false
+                        },
+                    )
+                }
             }
         }
 
-        // 开屏品牌画面
+        // 5) 开屏品牌画面
         AnimatedVisibility(
             visible = splash,
             exit = fadeOut(tween(250)),
@@ -381,6 +443,7 @@ fun MainScreen(vm: MonitorViewModel = viewModel()) {
             }
         }
 
+        // 6) 引导页（玻璃卡叠在内容之上）
         if (showOnboarding) {
             OnboardingOverlay(
                 pages = onboardPages,
@@ -450,7 +513,7 @@ private fun PrivGuideRow(tag: String, name: String, desc: String) {
         Spacer(Modifier.width(10.dp))
         Text(
             desc, color = Ink.tx2, fontSize = 12.5.sp,
-            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }
 }

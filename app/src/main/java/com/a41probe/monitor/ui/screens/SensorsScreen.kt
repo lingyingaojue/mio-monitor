@@ -10,10 +10,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -34,10 +34,11 @@ import com.a41probe.monitor.data.MonitorViewModel
 import com.a41probe.monitor.ui.components.MioCard
 import com.a41probe.monitor.ui.components.MioMetric
 import com.a41probe.monitor.ui.components.MioPageHeader
-import com.a41probe.monitor.ui.components.MioPageTopBar
+import com.a41probe.monitor.ui.components.MioPageScaffold
 import com.a41probe.monitor.ui.components.MioSectionHeader
 import com.a41probe.monitor.ui.components.ScrollAware
 import com.a41probe.monitor.ui.components.SensorTile
+import com.a41probe.monitor.ui.glass.LocalMioChromeInsets
 import com.a41probe.monitor.ui.theme.Ink
 import kotlin.math.roundToInt
 
@@ -59,14 +60,17 @@ fun SensorsScreen(vm: MonitorViewModel, onBack: () -> Unit = {}) {
 
     val inset = Modifier.padding(horizontal = 14.dp)
     val listState = rememberLazyListState()
-    Column(Modifier.fillMaxWidth().statusBarsPadding()) {
-        MioPageTopBar(title = "传感器", onBack = onBack)
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+    MioPageScaffold(title = "传感器", onBack = onBack) {
+        val chrome = LocalMioChromeInsets.current
+        Box(Modifier.fillMaxSize()) {
     ScrollAware(listState) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(top = 2.dp, bottom = 20.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                top = 2.dp + chrome.top,
+                bottom = 20.dp + chrome.bottom,
+            ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {

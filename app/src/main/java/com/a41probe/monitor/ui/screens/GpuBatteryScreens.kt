@@ -41,6 +41,7 @@ import com.a41probe.monitor.ui.components.MioPageHeader
 import com.a41probe.monitor.ui.components.ScrollAware
 import com.a41probe.monitor.ui.components.Sparkline
 import com.a41probe.monitor.ui.components.tempColor
+import com.a41probe.monitor.ui.glass.LocalMioChromeInsets
 import com.a41probe.monitor.ui.theme.DataState
 import com.a41probe.monitor.ui.theme.Ink
 import kotlinx.coroutines.Dispatchers
@@ -97,13 +98,16 @@ fun GpuScreen(vm: MonitorViewModel) {
     val busyHist by vm.busyHist.collectAsState()
     val tempH by vm.gpuTempHist.collectAsState()
 
+    // v3.1 液态玻璃：内容从玻璃顶栏/dock 下方穿过，LazyColumn 用壳层 insets 避让首末项
+    val chrome = LocalMioChromeInsets.current
+
     val inset = Modifier.padding(horizontal = PageHPad)
     val listState = rememberLazyListState()
     ScrollAware(listState) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(top = 2.dp, bottom = 20.dp),
+            contentPadding = PaddingValues(top = 2.dp + chrome.top, bottom = 20.dp + chrome.bottom),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { MioPageHeader("GPU", "占用 · 频率 · 核心温度") }
@@ -210,6 +214,10 @@ fun BatteryScreen(vm: MonitorViewModel) {
     val voltHist by vm.voltHist.collectAsState()
     val curHist by vm.curHist.collectAsState()
     val tempHist by vm.tempHist.collectAsState()
+
+    // v3.1 液态玻璃：内容从玻璃顶栏/dock 下方穿过，LazyColumn 用壳层 insets 避让首末项
+    val chrome = LocalMioChromeInsets.current
+
     // v20: 24h 容量趋势（本地记录，60s 粒度；页面可见时每 60s 刷新一次）
     var cap24 by remember { mutableStateOf(emptyList<Pair<Long, Int>>()) }
     LaunchedEffect(Unit) {
@@ -242,7 +250,7 @@ fun BatteryScreen(vm: MonitorViewModel) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(top = 2.dp, bottom = 20.dp),
+            contentPadding = PaddingValues(top = 2.dp + chrome.top, bottom = 20.dp + chrome.bottom),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { MioPageHeader("电池", "容量 · 电压电流 · 健康与循环") }

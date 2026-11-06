@@ -47,6 +47,7 @@ import com.a41probe.monitor.ui.components.MioMetric
 import com.a41probe.monitor.ui.components.MioPageHeader
 import com.a41probe.monitor.ui.components.MultiLine
 import com.a41probe.monitor.ui.components.ScrollAware
+import com.a41probe.monitor.ui.glass.LocalMioChromeInsets
 import com.a41probe.monitor.ui.theme.Ink
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -94,6 +95,9 @@ fun CpuScreen(vm: MonitorViewModel) {
     // v3.0: 频率历史保留订阅——每核 60s 走势（同簇 DVFS 共享，簇曲线天然重合）
     val hist by vm.freqHist.collectAsState()
 
+    // v3.1 液态玻璃：内容从玻璃顶栏/dock 下方穿过，LazyColumn 用壳层 insets 避让首末项
+    val chrome = LocalMioChromeInsets.current
+
     // sysfs 读取移出组合阶段：后台线程读一次，避免每秒主线程 IO
     var gov by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { gov = withContext(Dispatchers.IO) { CpuReader.governor() } }
@@ -122,7 +126,7 @@ fun CpuScreen(vm: MonitorViewModel) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(top = 2.dp, bottom = 20.dp),
+            contentPadding = PaddingValues(top = 2.dp + chrome.top, bottom = 20.dp + chrome.bottom),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { MioPageHeader("CPU 核心", "占用 · 频率 · 档位 · 调度") }

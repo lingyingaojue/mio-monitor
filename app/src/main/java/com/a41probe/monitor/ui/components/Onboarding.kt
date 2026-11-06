@@ -10,7 +10,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +42,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.a41probe.monitor.ui.glass.MioGlassRole
+import com.a41probe.monitor.ui.glass.MioGlassSampling
+import com.a41probe.monitor.ui.glass.MioGlassSurface
 import com.a41probe.monitor.ui.theme.Ink
 import com.a41probe.monitor.ui.theme.SpecialConfig
 import com.a41probe.monitor.ui.theme.artKeyResolve
@@ -56,7 +58,8 @@ const val KEY_ONBOARD_DONE = "onboarding_done"
 
 /**
  * 首次启动使用引导覆盖层（Miuix / BiliPai 版）：
- * 纯 Ink.bg 底 + 一张 28dp 大圆角分页卡片（立绘 / 标题 / 分条说明），
+ * Ink.bg 底 + 一张 28dp 大圆角**液态玻璃**分页卡片（立绘 / 标题 / 分条说明），
+ * 玻璃采样背景层（环境光 + 角色立绘），卡片下透出模糊后的页面底色；
  * 顶部左侧是品牌、右侧是「跳过」，底部是居中的进度指示与整行主按钮。
  * 文案与 onFinish 行为与旧版完全一致；系统返回键 = 回上一页（首页返回 = 跳过结束）。
  */
@@ -107,32 +110,37 @@ fun OnboardingOverlay(pages: List<OnboardingPage>, onFinish: () -> Unit) {
                 label = "onboard",
             ) { i ->
                 val p = pages[i]
-                Column(
-                    Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                // v3.1 液态玻璃：分页卡改为玻璃表面（CARD 角色 + 采样内容层）。
+                // 引导层是覆盖层，它下方是内容层（chromeState），因此显式采样 CHROME，
+                // 卡片下透出被模糊的仪表盘 UI；引导层自身不再叠第二层模糊，避免嵌套 haze。
+                MioGlassSurface(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp),
+                    shape = cardShape,
+                    role = MioGlassRole.CARD,
+                    sampling = MioGlassSampling.CHROME,
                 ) {
-                    Column(
-                        Modifier
-                            .fillMaxSize()
-                            .clip(cardShape)
-                            .background(Ink.card)
-                            .border(1.dp, Ink.stroke.copy(alpha = 0.6f), cardShape)
-                            .padding(24.dp),
-                    ) {
-                        // 立绘 / 表情：放在浅一档的圆角"舞台"里，透明底素材也不显单薄
+                    Column(Modifier.fillMaxSize().padding(24.dp)) {
+                        // 立绘 / 表情：玻璃舞台上的一层薄底，透明底素材也不显单薄
                         Box(
                             Modifier
                                 .fillMaxWidth()
                                 .height(206.dp)
                                 .clip(artShape)
-                                .background(Ink.panel.copy(alpha = 0.55f)),
+                                .background(Ink.glassFill.copy(alpha = 0.18f)),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Image(
-                                painter = painterResource(artKeyResolve(p.artKey)),
-                                contentDescription = null,
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier.fillMaxSize().padding(10.dp),
-                            )
+                            // 素材缺失（角色图不随仓库分发）时跳过绘制，避免 painterResource(0) 崩溃
+                            val artRes = artKeyResolve(p.artKey)
+                            if (artRes != 0) {
+                                Image(
+                                    painter = painterResource(artRes),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier.fillMaxSize().padding(10.dp),
+                                )
+                            }
                         }
                         Spacer(Modifier.height(20.dp))
                         Text(

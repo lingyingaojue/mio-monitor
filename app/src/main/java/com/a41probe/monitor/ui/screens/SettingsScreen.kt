@@ -28,10 +28,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -75,7 +73,7 @@ import com.a41probe.monitor.ui.components.MioCard
 import com.a41probe.monitor.ui.components.MioChoiceRow
 import com.a41probe.monitor.ui.components.MioHaptics
 import com.a41probe.monitor.ui.components.MioInfoRow
-import com.a41probe.monitor.ui.components.MioPageTopBar
+import com.a41probe.monitor.ui.components.MioPageScaffold
 import com.a41probe.monitor.ui.components.MioPreferenceGroup
 import com.a41probe.monitor.ui.components.MioSectionHeader
 import com.a41probe.monitor.ui.components.MioSettingRow
@@ -84,6 +82,9 @@ import com.a41probe.monitor.ui.components.ProbeButton
 import com.a41probe.monitor.ui.components.ScrollAware
 import com.a41probe.monitor.ui.components.rememberAnimatorScale
 import com.a41probe.monitor.ui.components.rememberHaptics
+import com.a41probe.monitor.ui.glass.LocalMioChromeInsets
+import com.a41probe.monitor.ui.glass.MioGlassSheetSurface
+import com.a41probe.monitor.ui.glass.currentGlassCapability
 import com.a41probe.monitor.ui.theme.Ink
 import com.a41probe.monitor.ui.theme.Palette
 import com.a41probe.monitor.ui.theme.Palettes
@@ -92,9 +93,7 @@ import com.a41probe.monitor.ui.theme.SpecialTheme
 import com.a41probe.monitor.ui.theme.Specials
 import com.a41probe.monitor.ui.theme.ThemeConfig
 import com.a41probe.monitor.ui.theme.ThemeMode
-import com.a41probe.monitor.ui.theme.liquidGlassSupported
-import com.android.purebilibili.core.ui.AppShapes
-import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -447,6 +446,7 @@ fun SettingsScreen(
     // v0.28.0: 设置页只需权限三态 → privFlow（低频流，整页不再每秒重组）
     val snap by vm.privFlow.collectAsState()
     val ctx = LocalContext.current
+    val cap = currentGlassCapability()
     val listState = rememberLazyListState()
 
     // 外观配置的本地镜像：写入持久化后立即反映到当前页
@@ -460,17 +460,17 @@ fun SettingsScreen(
     val haptics = rememberHaptics()
     val animScale = rememberAnimatorScale()
 
-    Column(Modifier.fillMaxWidth().statusBarsPadding()) {
-        // 整页自绘返回条（SET 页面在 MainActivity 中不显示全局顶栏）
-        MioPageTopBar(title = "设置", onBack = onBack)
+    MioPageScaffold(title = "设置", onBack = onBack) {
+        val chrome = LocalMioChromeInsets.current
 
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        Box(Modifier.fillMaxSize()) {
             ScrollAware(listState) {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+                    modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
-                        start = 16.dp, end = 16.dp, top = 2.dp, bottom = 20.dp,
+                        start = 16.dp, end = 16.dp,
+                        top = 2.dp + chrome.top, bottom = 20.dp + chrome.bottom,
                     ),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -521,26 +521,23 @@ fun SettingsScreen(
                                     },
                                 )
                             }
-                            // 液态玻璃：只有 Android 13+（Miuix blur 模块要求 API 33）才真正生效；
-                            // 低版本与「关闭」等价，避免设置项名不副实
-                            if (liquidGlassSupported()) {
-                                MioSwitchRow(
-                                    title = "液态玻璃",
-                                    checked = glassSel == GlassLevel.FULL,
-                                    subtitle = "Android 13+ 的 Miuix 液态控件（开关/滑块/按钮材质）；关闭后为纯色控件",
-                                    onCheckedChange = { on ->
-                                        val level = if (on) GlassLevel.FULL else GlassLevel.OFF
-                                        glassSel = level
-                                        GlassConfig.set(ctx, level)
-                                    },
-                                )
-                            } else {
-                                MioSettingRow(
-                                    title = "液态玻璃",
-                                    value = "Android 13+ 可用",
-                                    subtitle = "当前系统版本不支持 Miuix 模糊，已自动使用纯色控件",
-                                )
-                            }
+                            // v3.1 液态玻璃三档：完整（全部表面模糊）/ 简约（仅外壳模糊、卡片省电）/ 关闭（实色）
+                            SegmentSetting(
+                                title = "液态玻璃",
+                                subtitle = when {
+                                    cap.sdkInt >= Build.VERSION_CODES.TIRAMISU ->
+                                        "完整 = 全部表面实时模糊（含量子控件）；简约 = 仅外壳模糊、卡片省电；关闭 = 实色"
+                                    cap.sdkInt >= Build.VERSION_CODES.S ->
+                                        "完整 = 全部表面实时模糊；简约 = 仅外壳模糊；关闭 = 实色"
+                                    else -> "当前系统不支持实时模糊，玻璃为半透明材质；关闭 = 实色"
+                                },
+                                labels = GLASS_LABELS,
+                                selectedIndex = GLASS_LEVELS.indexOf(glassSel).coerceAtLeast(0),
+                                onSelect = { idx ->
+                                    glassSel = GLASS_LEVELS[idx]
+                                    GlassConfig.set(ctx, GLASS_LEVELS[idx])
+                                },
+                            )
                             SegmentSetting(
                                 title = "触感强度",
                                 subtitle = "按住「轻 / 中 / 重」任意一键可持续震动（松手即停），轻点选中该档",
@@ -831,56 +828,64 @@ fun SettingsScreen(
         }
     }
 
-    /* ---------------- 明暗模式选择弹层（Miuix 底部弹层） ---------------- */
+    /* ---------------- 明暗模式选择弹层（Miuix 底部弹层 · 液态玻璃） ---------------- */
     if (showModeSheet) {
         ModalBottomSheet(
             onDismissRequest = { showModeSheet = false },
-            containerColor = Ink.card,
-            shape = AppShapes.container(ContainerLevel.Sheet),
+            containerColor = Color.Transparent,
+            scrimColor = Color.Black.copy(alpha = 0.18f),
+            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+            dragHandle = null,
         ) {
-            Column(
-                Modifier.fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 24.dp),
+            ModalWindowBlurBehindEffect(enabled = cap.realtimeBlur, radius = 28.dp)
+            MioGlassSheetSurface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
             ) {
-                Text(
-                    "明暗模式",
-                    color = Ink.tx, fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "跟随系统时自动响应系统的深色模式设置",
-                    color = Ink.tx2, fontSize = 12.5.sp,
-                )
-                Spacer(Modifier.height(12.dp))
-                ThemeMode.entries.forEach { m ->
-                    val selected = m == mode
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .clickable {
-                                mode = m
-                                ThemeConfig.setMode(ctx, m)
-                                showModeSheet = false
-                            }
-                            .padding(horizontal = 12.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            m.label,
-                            color = if (selected) Ink.accent else Ink.tx,
-                            fontSize = 16.sp,
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (selected) {
-                            Icon(
-                                Icons.Rounded.Check,
-                                contentDescription = "已选",
-                                tint = Ink.accent,
-                                modifier = Modifier.size(20.dp),
+                Column(
+                    Modifier.fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 24.dp, bottom = 24.dp),
+                ) {
+                    Text(
+                        "明暗模式",
+                        color = Ink.tx, fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "跟随系统时自动响应系统的深色模式设置",
+                        color = Ink.tx2, fontSize = 12.5.sp,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    ThemeMode.entries.forEach { m ->
+                        val selected = m == mode
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .clickable {
+                                    mode = m
+                                    ThemeConfig.setMode(ctx, m)
+                                    showModeSheet = false
+                                }
+                                .padding(horizontal = 12.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                m.label,
+                                color = if (selected) Ink.accent else Ink.tx,
+                                fontSize = 16.sp,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                modifier = Modifier.weight(1f),
                             )
+                            if (selected) {
+                                Icon(
+                                    Icons.Rounded.Check,
+                                    contentDescription = "已选",
+                                    tint = Ink.accent,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
                         }
                     }
                 }

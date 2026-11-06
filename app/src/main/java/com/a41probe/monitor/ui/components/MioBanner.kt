@@ -35,19 +35,21 @@ import com.a41probe.monitor.ui.theme.Ink
 import com.a41probe.monitor.ui.theme.SpecialConfig
 
 /**
- * 页面背景立绘（Miuix 版）：澪固定立于内容区右下，作为一层安静的底纹；
- * 上方再叠一层 bg → transparent 的竖直渐变，保证大标题与雾玻璃卡片始终可读。
+ * 页面背景立绘（Miuix + 液态玻璃版）：澪固定立于内容区右下，作为玻璃卡片的
+ * 模糊采样底纹——卡片背后要有细节，实时模糊才看得出「液态玻璃」。
  *
- * - 立绘不透明度随主题：浅色 0.55 / 深色 0.35（深色底上图太亮会抢内容）；
+ * - 立绘不透明度随主题：浅色 0.68 / 深色 0.48（比 v3.0 提高，供玻璃透出细节）；
+ * - 顶部叠一层更透的 bg 渐变遮罩：保证大标题/卡片可读，同时不把角色盖死；
  * - art==0 不绘制（角色素材缺失的页面自然为空）；
  * - tab 切换时 220ms 交叉淡入；离屏缓存避免滚动时重复绘制全幅 PNG。
+ * 注意：本组件只画立绘与可读性遮罩，页面底色/环境光由 MioAmbientBackground 负责。
  */
 @Composable
 fun MioArtBackground(art: Int, modifier: Modifier = Modifier) {
     if (art == 0) return
     // 深色底判断：Ink.bg 亮度 < 0.5 视为深色主题（Ink 令牌本身随主题即时变化）
     val dark = Ink.bg.luminance() < 0.5f
-    val artAlpha = if (dark) 0.35f else 0.55f
+    val artAlpha = if (dark) 0.48f else 0.68f
     AnimatedContent(
         targetState = art,
         transitionSpec = {
@@ -68,13 +70,13 @@ fun MioArtBackground(art: Int, modifier: Modifier = Modifier) {
                         compositingStrategy = CompositingStrategy.Offscreen
                     },
             )
-            // 可读性遮罩：上半屏是页面底色（大标题与卡片永远压在干净底色上），
-            // 中段渐隐，下半屏完全透明——立绘从腰部以上完整露出，不被雾面盖死。
+            // 可读性遮罩（v3.1 更透）：顶部仍压住大标题区，中段快速渐隐，
+            // 下半屏完全透明——给玻璃卡片留出可采样的立绘细节，又不影响文字可读。
             Box(
                 Modifier.matchParentSize().background(
                     Brush.verticalGradient(
-                        0f to Ink.bg,
-                        0.30f to Ink.bg.copy(alpha = 0.72f),
+                        0f to Ink.bg.copy(alpha = 0.85f),
+                        0.30f to Ink.bg.copy(alpha = 0.50f),
                         0.58f to Color.Transparent,
                         1f to Color.Transparent,
                     )

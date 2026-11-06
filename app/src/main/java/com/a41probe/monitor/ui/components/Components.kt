@@ -26,16 +26,22 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,6 +50,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,6 +78,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.a41probe.monitor.ui.glass.LocalMioChromeInsets
+import com.a41probe.monitor.ui.glass.MioChromeInsets
+import com.a41probe.monitor.ui.glass.MioGlassRole
+import com.a41probe.monitor.ui.glass.MioGlassSurface
+import com.a41probe.monitor.ui.glass.TopBarHeight
+import com.a41probe.monitor.ui.glass.mioGlassGloss
 import com.a41probe.monitor.ui.theme.Ink
 import com.a41probe.monitor.ui.theme.Priv
 import com.android.purebilibili.core.ui.AppContentColors
@@ -371,42 +384,44 @@ fun SensorTile(
     dotColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Ink.card)
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    MioGlassSurface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        role = MioGlassRole.CARD,
     ) {
-        Box(
-            modifier = Modifier
-                .size(42.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(iconBg),
-            contentAlignment = Alignment.Center,
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.size(10.dp).clip(CircleShape).background(dotColor))
-        }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(name, color = Ink.tx, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Text(desc, color = Ink.tx2, fontSize = 11.5.sp)
-            Spacer(Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                valueLines.forEach { (v, u) ->
-                    Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
-                        Text(
-                            v, color = Ink.accent, fontSize = 13.sp, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium,
-                        )
-                        if (u.isNotEmpty()) {
-                            Spacer(Modifier.width(2.dp))
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(iconBg),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(Modifier.size(10.dp).clip(CircleShape).background(dotColor))
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(name, color = Ink.tx, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(desc, color = Ink.tx2, fontSize = 11.5.sp)
+                Spacer(Modifier.height(6.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    valueLines.forEach { (v, u) ->
+                        Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
                             Text(
-                                u, color = Ink.off, fontSize = 9.5.sp, maxLines = 1,
+                                v, color = Ink.accent, fontSize = 13.sp, maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
+                                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium,
                             )
+                            if (u.isNotEmpty()) {
+                                Spacer(Modifier.width(2.dp))
+                                Text(
+                                    u, color = Ink.off, fontSize = 9.5.sp, maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                 }
@@ -517,7 +532,7 @@ fun MioSectionHeader(
     }
 }
 
-/** Miuix 卡片（比 ProbeCard 多 contentPadding 控制） */
+/** 内容卡片（v3.1 液态玻璃）：背景实时模糊 + 半透明材质 + 高光描边。 */
 @Composable
 fun MioCard(
     modifier: Modifier = Modifier,
@@ -525,9 +540,10 @@ fun MioCard(
     contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    AppCard(
+    MioGlassSurface(
         modifier = modifier.fillMaxWidth(),
-        shape = AppCardShape.Semantic(ContainerLevel.Card),
+        shape = RoundedCornerShape(16.dp),
+        role = MioGlassRole.CARD,
         onClick = onClick,
     ) {
         Column(Modifier.fillMaxWidth().padding(contentPadding), content = content)
@@ -739,20 +755,25 @@ fun MioSettingRow(
     )
 }
 
-/** 分组卡片容器（设置页）：AppCard + 行间分割线由组件自绘 */
+/** 分组卡片容器（设置页，v3.1 液态玻璃） */
 @Composable
 fun MioPreferenceGroup(
+    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    AppCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = AppCardShape.Semantic(ContainerLevel.Card),
+    MioGlassSurface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        role = MioGlassRole.CARD,
     ) {
         Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) { content() }
     }
 }
 
-/** 页面返回条（功能页用：圆形返回 + 居中标题，BiliPai 设置页风格） */
+/**
+ * 页面返回条（v3.1 液态玻璃）：整条玻璃悬浮在内容之上，内容从它下方滚过。
+ * 调用方请用 [MioPageScaffold]（自动叠放 + 提供内容 insets），不要放进 Column 顶部。
+ */
 @Composable
 fun MioPageTopBar(
     title: String,
@@ -760,45 +781,80 @@ fun MioPageTopBar(
     modifier: Modifier = Modifier,
     action: (@Composable () -> Unit)? = null,
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
-            .height(58.dp),
+    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    MioGlassSurface(
+        modifier = modifier.fillMaxWidth().height(statusTop + TopBarHeight),
+        shape = RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp),
+        role = MioGlassRole.CHROME,
+        progress = 1f,
     ) {
-        // 48dp 触控目标内放 40dp 圆形按钮
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .size(48.dp)
-                .clickable(onClick = onBack),
-            contentAlignment = Alignment.Center,
-        ) {
+        Box(Modifier.fillMaxSize().padding(top = statusTop, start = 10.dp, end = 10.dp)) {
+            // 48dp 触控目标内放 38dp 玻璃圆钮
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Ink.panel),
+                    .align(Alignment.CenterStart)
+                    .size(48.dp)
+                    .clickable(onClick = onBack),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "返回",
-                    tint = Ink.tx,
-                    modifier = Modifier.size(20.dp),
-                )
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(Ink.glassFill.copy(alpha = 0.34f))
+                        .mioGlassGloss(CircleShape, lightAlpha = 0.5f, sheenAlpha = 0.10f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "返回",
+                        tint = Ink.tx,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+            Text(
+                title,
+                color = Ink.tx,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.align(Alignment.Center),
+            )
+            if (action != null) {
+                Box(Modifier.align(Alignment.CenterEnd)) { action() }
             }
         }
-        Text(
-            title,
-            color = Ink.tx,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.align(Alignment.Center),
+    }
+}
+
+/**
+ * 整页脚手架（v3.1）：内容铺满全屏（从玻璃返回条下方穿过），返回条以玻璃叠层悬浮，
+ * 并通过 [LocalMioChromeInsets] 把「返回条 + 底部安全区」的占位下发给内容。
+ */
+@Composable
+fun MioPageScaffold(
+    title: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val insets = remember(statusTop, navBottom) {
+        MioChromeInsets(
+            top = statusTop + TopBarHeight + 4.dp,
+            bottom = navBottom + 24.dp,
         )
-        if (action != null) {
-            Box(Modifier.align(Alignment.CenterEnd)) { action() }
+    }
+    Box(modifier.fillMaxSize()) {
+        CompositionLocalProvider(LocalMioChromeInsets provides insets) {
+            content()
         }
+        MioPageTopBar(
+            title = title,
+            onBack = onBack,
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
     }
 }
 

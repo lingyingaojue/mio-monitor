@@ -20,9 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -50,12 +48,13 @@ import com.a41probe.monitor.data.remote.PrivLevel
 import com.a41probe.monitor.ui.components.BrandKeepAlive
 import com.a41probe.monitor.ui.components.MioCard
 import com.a41probe.monitor.ui.components.MioInfoRow
-import com.a41probe.monitor.ui.components.MioPageTopBar
+import com.a41probe.monitor.ui.components.MioPageScaffold
 import com.a41probe.monitor.ui.components.MioPreferenceGroup
 import com.a41probe.monitor.ui.components.MioSectionHeader
 import com.a41probe.monitor.ui.components.ProbeButton
 import com.a41probe.monitor.ui.components.ScrollAware
 import com.a41probe.monitor.ui.components.SpecialFace
+import com.a41probe.monitor.ui.glass.LocalMioChromeInsets
 import com.a41probe.monitor.ui.theme.Ink
 import com.android.purebilibili.core.ui.components.AppSwitch
 import java.text.SimpleDateFormat
@@ -92,15 +91,16 @@ fun AgentScreen(
 
     val listState = rememberLazyListState()
 
-    Column(Modifier.fillMaxWidth().statusBarsPadding()) {
-        MioPageTopBar(title = "被监控模式", onBack = onBack)
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+    MioPageScaffold(title = "被监控模式", onBack = onBack) {
+        val chrome = LocalMioChromeInsets.current
+        Box(Modifier.fillMaxSize()) {
             ScrollAware(listState) {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+                    modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
-                        start = 16.dp, end = 16.dp, top = 2.dp, bottom = 20.dp,
+                        start = 16.dp, end = 16.dp,
+                        top = 2.dp + chrome.top, bottom = 20.dp + chrome.bottom,
                     ),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {

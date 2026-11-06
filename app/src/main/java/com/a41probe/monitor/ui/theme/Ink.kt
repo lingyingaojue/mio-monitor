@@ -50,6 +50,17 @@ data class MioColors(
     val divider: Color,
     /** 强调色浅底上可读的文字色 */
     val onAccentSoft: Color,
+    // ---- v3.1 玻璃材质令牌（MioGlass 引擎使用）----
+    /** 玻璃基底色（不透明底，透明度由玻璃几何决定） */
+    val glassFill: Color,
+    /** 玻璃上的主题色 tint */
+    val glassTint: Color,
+    /** 玻璃顶部高光描边 */
+    val glassRimLight: Color,
+    /** 玻璃底部暗边 */
+    val glassRimShade: Color,
+    /** 玻璃外阴影（随主题明暗） */
+    val glassShadow: Color,
 ) {
     companion object {
         private fun Color.lighten(amount: Float): Color = lerp(this, Color.White, amount)
@@ -111,6 +122,11 @@ data class MioColors(
                     surfaceSunken = palette.panel,
                     divider = palette.stroke,
                     onAccentSoft = palette.accent,
+                    glassFill = Color.White,
+                    glassTint = palette.accent,
+                    glassRimLight = Color.White.copy(alpha = 0.88f),
+                    glassRimShade = Color(0xFF1C1C1E).copy(alpha = 0.06f),
+                    glassShadow = palette.shadowTint.copy(alpha = 0.24f),
                 )
             }
             val darkAccent = palette.accent.lighten(0.34f)
@@ -145,6 +161,11 @@ data class MioColors(
                 surfaceSunken = Color(0xFF111111),
                 divider = Color(0xFF2A2A2A),
                 onAccentSoft = darkAccent,
+                glassFill = Color(0xFF161616),
+                glassTint = darkAccent,
+                glassRimLight = Color.White.copy(alpha = 0.34f),
+                glassRimShade = Color.Black.copy(alpha = 0.30f),
+                glassShadow = Color.Black.copy(alpha = 0.55f),
             )
         }
     }
@@ -197,6 +218,13 @@ object Ink {
     val surfaceSunken: Color get() = state.value.surfaceSunken
     val divider: Color get() = state.value.divider
     val onAccentSoft: Color get() = state.value.onAccentSoft
+
+    // v3.1 玻璃材质令牌
+    val glassFill: Color get() = state.value.glassFill
+    val glassTint: Color get() = state.value.glassTint
+    val glassRimLight: Color get() = state.value.glassRimLight
+    val glassRimShade: Color get() = state.value.glassRimShade
+    val glassShadow: Color get() = state.value.glassShadow
 }
 
 // 提权档位标注：颜色改为计算属性，随主题即时变化

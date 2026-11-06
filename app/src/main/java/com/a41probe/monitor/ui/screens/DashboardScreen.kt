@@ -34,6 +34,7 @@ import com.a41probe.monitor.ui.components.MioMetric
 import com.a41probe.monitor.ui.components.MioPageHeader
 import com.a41probe.monitor.ui.components.ScrollAware
 import com.a41probe.monitor.ui.components.tempColor
+import com.a41probe.monitor.ui.glass.LocalMioChromeInsets
 import com.a41probe.monitor.ui.theme.Ink
 import kotlin.math.roundToInt
 
@@ -87,6 +88,9 @@ fun DashboardScreen(
     val gpu by vm.gpuFlow.collectAsState()
     val load by vm.loadFlow.collectAsState()
 
+    // v3.1 液态玻璃：内容从玻璃顶栏/dock 下方穿过，LazyColumn 用壳层 insets 避让首末项
+    val chrome = LocalMioChromeInsets.current
+
     // v3.0: hero 数字由 MioMetric 内置平滑滚动呈现；冷启动"只滚一次"的状态机在此收尾
     LaunchedEffect(vm.heroReady) { if (vm.heroReady) vm.heroRollDone() }
 
@@ -96,7 +100,7 @@ fun DashboardScreen(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(top = 2.dp, bottom = 20.dp),
+            contentPadding = PaddingValues(top = 2.dp + chrome.top, bottom = 20.dp + chrome.bottom),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { MioPageHeader("仪表盘", "电量 · CPU · 内存 · 温度") }

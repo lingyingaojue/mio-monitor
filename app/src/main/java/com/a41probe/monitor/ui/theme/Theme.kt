@@ -18,6 +18,10 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.a41probe.monitor.ui.components.GlassConfig
 import com.a41probe.monitor.ui.components.GlassLevel
+import com.a41probe.monitor.ui.glass.GlassRenderMode
+import com.a41probe.monitor.ui.glass.LocalMioGlassCapability
+import com.a41probe.monitor.ui.glass.rememberGlassCapability
+import com.a41probe.monitor.ui.glass.resolveGlassCapability
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.BiliMiuixTypography
 import com.android.purebilibili.core.theme.LocalAppUiStyle
@@ -63,7 +67,7 @@ fun liquidGlassSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_COD
 
 /** 玻璃档位 + 系统版本 → 是否启用液态玻璃（纯函数，便于单元测试） */
 internal fun resolveLiquidGlassEnabled(level: GlassLevel, sdkInt: Int): Boolean =
-    level == GlassLevel.FULL && sdkInt >= Build.VERSION_CODES.TIRAMISU
+    resolveGlassCapability(level, sdkInt).liquidControls
 
 @Composable
 fun MioTheme(
@@ -78,15 +82,21 @@ fun MioTheme(
     val shapes = remember { resolveMaterialShapes(AppUiStyle.MIUIX) }
     val motionScheme = remember { resolveMaterialMotionScheme(AppUiStyle.MIUIX) }
 
-    val glassLevel = GlassConfig.effective()
-    val liquidGlassEnabled = resolveLiquidGlassEnabled(glassLevel, Build.VERSION.SDK_INT)
+    // v3.1 液态玻璃：Haze 引擎由 MioGlassHost 实现；这里只把能力/档位同步给 design-system
+    val capability = rememberGlassCapability()
+    val liquidGlassEnabled = capability.liquidControls
 
-    val themeConfig = remember(liquidGlassEnabled) {
+    val themeConfig = remember(capability) {
         AppThemeConfig(
-            blurIntensity = BlurIntensity.APPLE_DOCK,
-            headerBlurEnabled = liquidGlassEnabled,
-            bottomBarBlurEnabled = liquidGlassEnabled,
-            progressiveTopBlurEnabled = liquidGlassEnabled,
+            blurIntensity = when (capability.mode) {
+                GlassRenderMode.LIQUID -> BlurIntensity.APPLE_DOCK
+                GlassRenderMode.BLUR -> BlurIntensity.THICK
+                GlassRenderMode.TINT -> BlurIntensity.THIN
+                GlassRenderMode.OFF -> BlurIntensity.THIN
+            },
+            headerBlurEnabled = capability.realtimeBlur,
+            bottomBarBlurEnabled = capability.realtimeBlur,
+            progressiveTopBlurEnabled = capability.realtimeBlur,
             progressiveTopFadeEnabled = true,
             hapticFeedbackEnabled = true,
             liquidGlassEnabled = liquidGlassEnabled,
@@ -97,7 +107,8 @@ fun MioTheme(
     CompositionLocalProvider(
         LocalAppUiStyle provides AppUiStyle.MIUIX,
         LocalDynamicColorActive provides false,
-        LocalSettingsLiquidGlassEnabled provides liquidGlassEnabled,
+        LocalSettingsLiquidGlassEnabled provides capability.enabled,
+        LocalMioGlassCapability provides capability,
         LocalLiquidControlThemeColor provides miuixColors.primary,
         LocalAppIconStyle provides resolveAppIconStyle(AppIconStyle.AUTO, AppUiStyle.MIUIX),
         LocalAppListItemStyle provides resolveAppListItemStyle(AppListItemStyle.AUTO, AppUiStyle.MIUIX),
