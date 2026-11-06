@@ -446,6 +446,7 @@ fun SettingsScreen(
     onOpenAgent: () -> Unit = {},
     onOpenMonitor: () -> Unit = {},
     onShowOnboarding: () -> Unit = {},
+    onOpenToolbox: () -> Unit = {},
 ) {
     // v0.28.0: 设置页只需权限三态 → privFlow（低频流，整页不再每秒重组）
     val snap by vm.privFlow.collectAsState()
@@ -799,6 +800,24 @@ fun SettingsScreen(
                         }
                     }
 
+                    /* ---------------- 实验功能（OriginOS 调校，v3.5） ---------------- */
+                    item {
+                        MioSectionHeader(
+                            "实验功能",
+                            modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                        )
+                    }
+                    item {
+                        MioPreferenceGroup {
+                            MioChoiceRow(
+                                title = "OriginOS 调校",
+                                value = "默认关闭",
+                                subtitle = "触控拉满 / 强开插帧 / 高刷锁定 / 视效增强；会写入系统设置，支持一键恢复",
+                                onClick = onOpenToolbox,
+                            )
+                        }
+                    }
+
                     /* ---------------- 关于 ---------------- */
                     item {
                         MioSectionHeader(
@@ -810,7 +829,7 @@ fun SettingsScreen(
                         MioCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)) {
                             MioInfoRow(
                                 "App",
-                                "v${BuildConfig.VERSION_NAME} · 纯只读",
+                                "v${BuildConfig.VERSION_NAME} · 监控只读 · 调校默认关闭",
                                 stateColor = Ink.accent,
                                 mono = false,
                             )

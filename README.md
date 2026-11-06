@@ -8,7 +8,7 @@
 
 <br/>
 
-![Version](https://img.shields.io/badge/version-v3.4-007AFF)
+![Version](https://img.shields.io/badge/version-v3.5-007AFF)
 ![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.4-7F52FF?logo=kotlin&logoColor=white)
 ![Compose](https://img.shields.io/badge/Jetpack%20Compose-Miuix-4285F4?logo=jetpackcompose&logoColor=white)
@@ -25,7 +25,7 @@
 
 Mio 澪 是一款安卓硬件参数与性能监控应用。它把设备能够读到的硬件信息，尽可能完整、准确地呈现出来：CPU 每核频率与占用、GPU 负载与频率、电池电压电流功率与健康度、几十路热区温度与散热动作、内存与传感器。
 
-**v3.4 底部导航栏直接使用 BiliPai 原版组件**：不再自研 dock 视觉，vendor BiliPai v0.7.8 的 `FloatingBottomBar` 及依赖闭包（壳体玻璃 / 液态指示器 / 拖动选择 / 重力高光 / Bloom 高光），Mio 只负责把 5 个 tab 状态映射进去；`设置 → 外观 → 底部导航栏` 可切回 Mio 简版。**v3.3** 顶栏/返回条接入 Miuix Backdrop 光学链（背板录制 + 增艳 + 实时模糊 + 边缘折射/色散 + Bloom 高光 + 悬浮投影）；**v3.2** 下调玻璃填充不透明度；**v3.1** 接入 Haze 实时背景模糊。BiliPai 源码搬运清单见 [design-system/VENDORED.md](design-system/VENDORED.md)。
+**v3.5 OriginOS 实验调校**：把 ADB 实测可用的 4 项系统设置做成开关（触控拉满 / 强开全局插帧 / 全局高刷锁定 / 全局视效增强），默认全关、首次进入需确认风险，支持一键恢复默认与恢复原始值；写入通道自动选择（ADB 授权 / Root / Shizuku），每次都回读校验；system 类 key 需 Shizuku / Root。**v3.4 底部导航栏直接使用 BiliPai 原版组件**（vendor BiliPai v0.7.8 的 `FloatingBottomBar` 及依赖闭包，Mio 只做 tab 状态映射）。**v3.3** 顶栏/返回条接入 Miuix Backdrop 光学链（背板录制 + 增艳 + 实时模糊 + 边缘折射/色散 + Bloom 高光 + 悬浮投影）；**v3.2** 下调玻璃填充不透明度；**v3.1** 接入 Haze 实时背景模糊。BiliPai 源码搬运清单见 [design-system/VENDORED.md](design-system/VENDORED.md)。
 
 **v3.0 界面体系重做**：整套 UI 换成 BiliPai 的 Miuix 视觉语言——5 个主 tab 的悬浮玻璃底栏、滚动感知的玻璃顶栏、大圆角分组卡片、Miuix 设置页，并新增**浅色 / 深色 / 跟随系统**三种主题。
 
@@ -33,7 +33,7 @@ Mio 澪 是一款安卓硬件参数与性能监控应用。它把设备能够读
 
 ## 三条基本原则
 
-**只读。** 不写任何系统节点，不修改任何设置，不申请与功能无关的权限。它只读取，不干预。
+**只读监控。** 监控功能不写任何系统节点、不修改任何设置、不申请与监控无关的权限。另有 **OriginOS 实验调校**（v3.5，默认全部关闭）：只有你手动开启才写入固定白名单的少量系统设置，可随时关闭并一键恢复默认/原始值。
 
 **免 root 可用。** 安装后即可读取电量、内存、传感器以及多数机型的 CPU 频率与占用。安装 Shizuku（非 root，一次性授权）后，热区温度、CPU 占用、充电器输入侧电压电流进一步开放。
 
@@ -134,6 +134,30 @@ Mio 澪 是一款安卓硬件参数与性能监控应用。它把设备能够读
 - **动效规范**：全局采用单一缓动曲线与统一时长（按下 130ms、松开 240ms、导航指示器 280ms、数值 320ms）。导航指示器平滑移动；卡片按下轻微收缩、阴影与明度同步下沉，抬起平滑恢复。
 - **数值过渡**：CPU 占用、温度、内存等高频变化数值采用插值滚动，避免逐秒跳变。
 - **无障碍**：跟随系统「关闭动画」设置，开启时所有动效直接切换。
+
+---
+
+## OriginOS 实验调校（v3.5，默认关闭）
+
+设置 → **实验功能 → OriginOS 调校**。只针对 vivo / iQOO OriginOS 做了实测，其它设备自动保持只读。
+
+| 开关 | 写入的 key（命名空间） | 说明 / 风险 |
+|---|---|---|
+| 触控拉满 | `game_memc_request_touch_rate`（global） | 提高触控采样率；功耗略增、长时间高采样对屏幕有压力 |
+| 强开全局插帧 | `gamecube_frame_interpolation`（system） | 值格式 `1:1:0:<from>:<to>`；会牺牲原生分辨率，`to` 需匹配屏幕刷新率 |
+| 全局高刷锁定 | `min_refresh_rate` + `peak_refresh_rate`（system） | 锁 120/144Hz；待机更费电、静态画面不降频 |
+| 全局视效增强 | `gamecube_hawkeye_effective`（system） | 只改这一个 key，不动色彩模式 |
+
+- **默认全部关闭**；首次进入必须确认风险。每项都有二次确认与风险文案。
+- **写入通道**自动选择并回读校验：
+  - **触控拉满**（global）可用 ADB 授权直写：`adb shell pm grant com.a41probe.monitor android.permission.WRITE_SECURE_SETTINGS`；
+  - **插帧 / 高刷锁定 / 视觉增强**（system）在 Android 17 上会被 App 直写权限拒绝，需要授权 **Shizuku** 或 **Root**（页面内有一键请求 Shizuku）；
+  - vivo 的 `settings put` 会静默丢弃；`content insert` 又不接受插帧这种带冒号的值。因此 Shizuku/Root 通道改用 `app_process` 以 shell 身份直调 SettingsProvider（`ToolboxShellWriter`），三类值都能写，写完仍回读校验。
+- 页面不再展示已排除的 Monster+ / BOOST+ / 直驱供电 / 满亮度等无效或高风险项。
+- **可回滚**：页面提供「全部恢复系统默认」（删除 key）与「恢复首次写入前的原始值」（有备份时）。
+- **可选守护**：OriginOS 会定期清理这些 key；开启「保持生效」后前台服务每 5 秒检查并重写（常驻通知可见，可随时关闭）。默认关闭。
+- 已实测不可用/不建议的功能（Monster+、BOOST+、强开直驱供电、满亮度）不提供，页面内写明原因。
+- ⚠️ **卸载前请先「全部恢复默认」**，否则已写入的 key 会残留；也可用 adb 手动删除：`adb shell settings delete <global|system> <key>`。
 
 ---
 

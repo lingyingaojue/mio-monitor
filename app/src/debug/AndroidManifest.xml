@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- 仅 debug 包：ADB 自动化测试钩子（见 ToolboxDebugReceiver 注释） -->
+        <receiver
+            android:name=".debug.ToolboxDebugReceiver"
+            android:exported="true"
+            android:permission="android.permission.WRITE_SECURE_SETTINGS" />
+    </application>
+</manifest>

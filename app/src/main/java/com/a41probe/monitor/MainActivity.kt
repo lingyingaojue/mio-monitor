@@ -73,6 +73,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.a41probe.monitor.data.MonitorViewModel
+import com.a41probe.monitor.data.toolbox.ToolboxController
 import com.a41probe.monitor.ui.components.MioArtBackground
 import com.a41probe.monitor.ui.components.MioBottomDock
 import com.a41probe.monitor.ui.components.MioChip
@@ -109,6 +110,7 @@ import com.a41probe.monitor.ui.screens.RemoteDetailScreen
 import com.a41probe.monitor.ui.screens.SensorsScreen
 import com.a41probe.monitor.ui.screens.SettingsScreen
 import com.a41probe.monitor.ui.screens.ThermalScreen
+import com.a41probe.monitor.ui.screens.ToolboxScreen
 import com.a41probe.monitor.ui.theme.Ink
 import com.a41probe.monitor.ui.theme.MioTheme
 import com.a41probe.monitor.ui.theme.SpecialConfig
@@ -119,7 +121,7 @@ import kotlinx.coroutines.delay
 enum class Screen(val label: String) {
     DASH("仪表盘"), CPU("CPU"), GPU("GPU"), BAT("电池"), THERM("温度"),
     SENS("传感器"), SET("设置"),
-    AGENT("被监控"), MONITOR("监控"), RDETAIL("设备详情")
+    AGENT("被监控"), MONITOR("监控"), RDETAIL("设备详情"), TOOLBOX("实验功能")
 }
 
 /** 5 个主 tab（BiliPai 底栏设计：5 项 + 悬浮 dock） */
@@ -133,7 +135,7 @@ private val MAIN_TABS = MAIN_TAB_SCREENS.toSet()
 /** 返回键策略：页面逐级返回，tab 页交给系统退出。 */
 internal fun backTarget(screen: Screen, settingsReturn: Screen): Screen = when (screen) {
     Screen.RDETAIL -> Screen.MONITOR
-    Screen.SENS, Screen.AGENT, Screen.MONITOR -> Screen.SET
+    Screen.SENS, Screen.AGENT, Screen.MONITOR, Screen.TOOLBOX -> Screen.SET
     Screen.SET -> settingsReturn
     else -> Screen.DASH
 }
@@ -304,6 +306,7 @@ fun MainScreen(vm: MonitorViewModel = viewModel()) {
                             onOpenAgent = { screen = Screen.AGENT },
                             onOpenMonitor = { screen = Screen.MONITOR },
                             onShowOnboarding = { showOnboarding = true },
+                            onOpenToolbox = { screen = Screen.TOOLBOX },
                         )
                         Screen.AGENT -> AgentScreen(vm)
                         Screen.MONITOR -> MonitorScreen(
@@ -312,6 +315,7 @@ fun MainScreen(vm: MonitorViewModel = viewModel()) {
                         Screen.RDETAIL -> RemoteDetailScreen(
                             deviceKey = remoteKey,
                         )
+                        Screen.TOOLBOX -> ToolboxScreen(onBack = { screen = Screen.SET })
                     }
                 }
             }
@@ -434,7 +438,7 @@ fun MainScreen(vm: MonitorViewModel = viewModel()) {
                     )
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        "参数监控 · 纯只读", color = Ink.onAccent.copy(alpha = 0.85f),
+                        "参数监控 · 监控只读", color = Ink.onAccent.copy(alpha = 0.85f),
                         fontSize = 13.sp, letterSpacing = 1.5.sp,
                     )
                     if (ver.isNotEmpty()) {
@@ -531,6 +535,7 @@ private fun pageTitleFor(s: Screen): String = when (s) {
     Screen.AGENT -> "被监控模式"
     Screen.MONITOR -> "监控端"
     Screen.RDETAIL -> "设备详情"
+    Screen.TOOLBOX -> "实验功能"
     else -> ""
 }
 

@@ -25,6 +25,8 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- v3.5: OriginOS 调校（直写 settings 需要；仅 adb/root 可授予，App 只写固定白名单 key） -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
 
     <!-- v0.28.8: 轻触感反馈（Tab 切换 / 卡片按下）——普通权限，无运行时弹窗 -->
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -80,5 +82,20 @@
             android:name=".data.agent.KeepAliveJobService"
             android:permission="android.permission.BIND_JOB_SERVICE"
             android:exported="false" />
-    </application>
+        <!-- v3.5: OriginOS 调校功能守护（用户显式开启才运行） -->
+        <service
+            android:name=".data.toolbox.ToolboxGuardService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="OriginOS 调校项被系统重置时自动重写（用户显式开启的守护）" />
+        </service>
+        <receiver
+            android:name=".data.toolbox.ToolboxBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>    </application>
 </manifest>
