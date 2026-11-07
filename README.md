@@ -1,5 +1,11 @@
 <div align="center">
 
+<p align="center">
+  <b>简体中文</b> ·
+  <a href="README.en.md">English</a> ·
+  <a href="README.ja.md">日本語</a>
+</p>
+
 <img src="docs/assets/icon.png" width="112" alt="Mio 澪" />
 
 <h1>Mio 澪</h1>
