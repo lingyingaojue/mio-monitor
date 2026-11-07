@@ -129,63 +129,210 @@ object ShizukuBridge {
     }
 }
 
-/** Root 桥（v20.11）：真实探测 su 可用性 + root shell 执行通道。
- *  探测：`su -c id -u` 判 uid==0（纯只读，不做任何系统修改）。
- *  执行：su -c cmd，超时 + stderr 排空 + 进程销毁，与 ShizukuBridge 同构。
- *  只读监控原则：root 仅用于读取受保护节点（GPU 频率 / cpu0 max / 背光等），不写任何系统状态。 */
+/* ============================================================
+ * Root 通道（v3.14）
+ *
+ * 支持 Magisk / KernelSU / KernelSU Next / APatch / SuperSU：
+ *  - 管理器检测（需要 Manifest <queries> 才能查包）；
+ *  - su 候选路径探测（不假设 PATH 里有 su）；
+ *  - 显式授权入口可等待管理器弹窗，不再被 2s 启动探测误判；
+ *  - 读取默认短超时，写入可传更长超时（app_process 冷启动）。
+ * ============================================================ */
+
+data class RootManagerInfo(val packageName: String, val label: String)
+
+internal val ROOT_MANAGERS = listOf(
+    RootManagerInfo("com.rifsxd.ksunext", "KernelSU Next"),
+    RootManagerInfo("me.weishu.kernelsu", "KernelSU"),
+    RootManagerInfo("com.topjohnwu.magisk", "Magisk"),
+    RootManagerInfo("me.bmax.apatch", "APatch"),
+    RootManagerInfo("eu.chainfire.supersu", "SuperSU"),
+)
+
+internal val ROOT_SU_CANDIDATES = listOf(
+    "su",
+    "/system/bin/su",
+    "/system/xbin/su",
+    "/sbin/su",
+    "/debug_ramdisk/su",
+    "/data/adb/ksu/bin/su",
+    "/data/adb/ap/bin/su",
+    "/data/adb/magisk/su",
+    "/su/bin/su",
+)
+
+internal fun rootManagerInfo(pkg: String?): RootManagerInfo? =
+    ROOT_MANAGERS.firstOrNull { it.packageName == pkg }
+
+/** `id -u` 或 `id` 输出是否表示 uid=0（不同 root 管理器输出格式不同）。 */
+internal fun parseRootUid(output: String?): Boolean =
+    output?.lineSequence()
+        ?.map { it.trim() }
+        ?.any { line ->
+            line == "0" || line == "uid=0" ||
+                line.startsWith("uid=0(") || line.startsWith("uid=0 ")
+        } == true
+
+enum class RootState { UNKNOWN, ACTIVE, DENIED, MANAGER_ONLY, NOT_FOUND }
+
+data class RootStatus(
+    val state: RootState = RootState.UNKNOWN,
+    val managerLabel: String? = null,
+    val managerPackage: String? = null,
+    val suPath: String? = null,
+    val detail: String? = null,
+) {
+    val isActive: Boolean get() = state == RootState.ACTIVE
+}
+
+/** Root 桥：管理器检测 + su 路径解析 + root shell。 */
 object RootBridge {
 
-    @Volatile var available: Boolean = false; private set
-    // v20.12(S0-1): 运行期失权检测——bulk 连续失败达阈值即标记不可用并异步重探测
+    @Volatile var available: Boolean = false
+        private set
+
+    @Volatile private var appContext: Context? = null
+    @Volatile private var statusValue = RootStatus()
+    @Volatile private var suBinary = "su"
     @Volatile private var failStreak = 0
     private const val FAIL_LIMIT = 5
     private const val EXEC_TIMEOUT_MS = 2500L
 
-    /** bulk 读取成功 → 通道健康，清零失败计数 */
+    fun init(ctx: Context) {
+        appContext = ctx.applicationContext
+    }
+
+    fun status(): RootStatus = statusValue
+
+    /** bulk 读取成功 → 通道健康 */
     fun noteExecOk() { failStreak = 0 }
 
-    /** bulk 读取失败 → 累计；达阈值判定失权：置不可用 + 异步重探测（不阻塞采样循环） */
+    /** bulk 读取失败 → 连续失败后判失权并异步重探测 */
     fun noteExecFail() {
         failStreak++
         if (failStreak >= FAIL_LIMIT) {
             failStreak = 0
             available = false
+            statusValue = statusValue.copy(
+                state = RootState.UNKNOWN,
+                detail = "Root 通道连续失败，正在重新探测…",
+            )
             Thread { refresh() }.apply { isDaemon = true }.start()
         }
     }
+
     private val EXEC_POOL = java.util.concurrent.Executors.newFixedThreadPool(2) { r ->
         Thread(r, "a41-root").apply { isDaemon = true }
     }
-    // 存活进程表，超时路径直接 destroy（关闭管道 → 阻塞 read 立即 EOF）
     private val liveProcs = java.util.concurrent.ConcurrentHashMap.newKeySet<Process>()
 
-    fun refresh() {
-        var p: Process? = null
-        available = try {
-            p = ProcessBuilder("su", "-c", "id -u").redirectErrorStream(true).start()
-            // v20.12(S1-1): 先 waitFor 再读行——su 授权弹窗期间 readLine 会无界阻塞，
-            // waitFor 超时销毁管道后 readLine 立即 EOF，探测线程不再被卡死
-            if (!p.waitFor(2, TimeUnit.SECONDS)) {
-                p.destroyForcibly()
-                false
+    /** 启动/刷新用短探测（不长时间占用 UI/采样线程）。 */
+    fun refresh(): Boolean = probe(2_000L).isActive
+
+    /** 用户点“检测并授权 Root”时使用：等待管理器弹窗。 */
+    fun authorize(waitMs: Long = 20_000L): RootStatus = probe(waitMs)
+
+    private fun probe(waitMs: Long): RootStatus {
+        val manager = detectManager()
+        var denied = false
+        var timedOut = false
+        for (candidate in ROOT_SU_CANDIDATES) {
+            // 带提示的授权通常发生在 "su"/系统路径；其余绝对路径快速尝试
+            val perTry = if (candidate == "su" || candidate == "/system/bin/su" || candidate == "/system/xbin/su") {
+                waitMs
             } else {
-                p.inputStream.bufferedReader().use { it.readLine() }?.trim() == "0"
+                waitMs.coerceAtMost(3_000L)
             }
-        } catch (t: Throwable) {
-            false
+            when (probeCandidate(candidate, perTry)) {
+                ProbeResult.SUCCESS -> {
+                    suBinary = candidate
+                    available = true
+                    failStreak = 0
+                    val detail = if (manager != null) {
+                        "已通过 ${manager.label} 获得 Root"
+                    } else {
+                        "su 可用（$candidate）"
+                    }
+                    statusValue = RootStatus(
+                        state = RootState.ACTIVE,
+                        managerLabel = manager?.label,
+                        managerPackage = manager?.packageName,
+                        suPath = candidate,
+                        detail = detail,
+                    )
+                    return statusValue
+                }
+                ProbeResult.DENIED -> denied = true
+                ProbeResult.TIMEOUT -> timedOut = true
+                ProbeResult.MISSING -> Unit
+            }
+        }
+        available = false
+        suBinary = "su"
+        val state = when {
+            manager != null -> RootState.MANAGER_ONLY
+            denied -> RootState.DENIED
+            else -> RootState.NOT_FOUND
+        }
+        val detail = when {
+            manager != null && timedOut ->
+                "检测到 ${manager.label}，等待授权超时；请在管理器中允许 Mio 获取 Root（必要时开启临时 Root/兼容模式）后重试"
+            manager != null ->
+                "检测到 ${manager.label}，但 su 当前不可用；请在管理器中授予 Mio 超级用户权限后重试"
+            denied -> "Root 授权被拒绝；请重试并在管理器中允许"
+            else -> "未检测到 Root 管理器或 su；可继续使用 Shizuku / 免提权"
+        }
+        statusValue = RootStatus(
+            state = state,
+            managerLabel = manager?.label,
+            managerPackage = manager?.packageName,
+            suPath = null,
+            detail = detail,
+        )
+        return statusValue
+    }
+
+    private enum class ProbeResult { SUCCESS, DENIED, TIMEOUT, MISSING }
+
+    private fun probeCandidate(binary: String, timeoutMs: Long): ProbeResult {
+        var proc: Process? = null
+        return try {
+            proc = ProcessBuilder(binary, "-c", "id -u").redirectErrorStream(true).start()
+            if (!proc.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
+                proc.destroyForcibly()
+                ProbeResult.TIMEOUT
+            } else {
+                val out = runCatching { proc.inputStream.bufferedReader().use { it.readText() } }
+                    .getOrDefault("")
+                when {
+                    parseRootUid(out) -> ProbeResult.SUCCESS
+                    out.contains("denied", ignoreCase = true) ||
+                        out.contains("not allowed", ignoreCase = true) ->
+                        ProbeResult.DENIED
+                    else -> ProbeResult.MISSING
+                }
+            }
+        } catch (_: Throwable) {
+            ProbeResult.MISSING
         } finally {
-            runCatching { p?.destroy() }
+            runCatching { proc?.destroy() }
         }
     }
 
-    /** 执行一条 root shell 命令（su -c），带超时；返回输出；失败/超时返回 null */
-    fun exec(cmd: String): String? {
+    private fun detectManager(): RootManagerInfo? {
+        val ctx = appContext ?: return null
+        return ROOT_MANAGERS.firstOrNull { info ->
+            runCatching { ctx.packageManager.getPackageInfo(info.packageName, 0) }.isSuccess
+        }
+    }
+
+    /** 执行一条 root shell 命令；默认 2.5s，写入可传更长超时。 */
+    fun exec(cmd: String, timeoutMs: Long = EXEC_TIMEOUT_MS): String? {
         if (!available) return null
-        // v20.12(S1-6): per-call 持有自身进程，超时只销毁自己，不误杀并发 exec
         val holder = java.util.concurrent.atomic.AtomicReference<Process?>()
         val future = EXEC_POOL.submit(java.util.concurrent.Callable<String?> { runExec(cmd, holder) })
         return try {
-            future.get(EXEC_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            future.get(timeoutMs, TimeUnit.MILLISECONDS)
         } catch (t: Throwable) {
             future.cancel(true)
             holder.get()?.let { runCatching { it.destroyForcibly() } }
@@ -198,8 +345,7 @@ object RootBridge {
         if (!available) return null
         var proc: Process? = null
         return try {
-            // v20.12(S2-4): stderr 与 stdout 合并（命令均 2>/dev/null），省一次排空线程
-            proc = ProcessBuilder("su", "-c", cmd).redirectErrorStream(true).start()
+            proc = ProcessBuilder(suBinary, "-c", cmd).redirectErrorStream(true).start()
             holder.set(proc)
             liveProcs.add(proc)
             val sb = StringBuilder()
@@ -219,7 +365,6 @@ object RootBridge {
         }
     }
 }
-
 /** 电池：sysfs 全套 + BatteryManager + 系统广播双口径；特征值低频刷新（M20） */
 object BatteryReader {
 

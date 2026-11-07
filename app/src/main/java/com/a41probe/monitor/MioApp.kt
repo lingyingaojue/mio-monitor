@@ -1,6 +1,7 @@
 package com.a41probe.monitor
 
 import android.app.Application
+import com.a41probe.monitor.data.RootBridge
 import com.a41probe.monitor.data.toolbox.ToolboxConfig
 import com.a41probe.monitor.ui.components.BottomBarStyleConfig
 import com.a41probe.monitor.ui.components.GlassConfig
@@ -18,6 +19,8 @@ class MioApp : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashCatcher.install(this)
+        // v3.14: 缓存 Context 供 Root 管理器检测；实际 su 探测在 ViewModel/设置页发起
+        RootBridge.init(this)
         // v0.28.3: 玻璃档位在进程最早期加载（SharedPreferences），UI 首帧即生效
         GlassConfig.init(this)
         // v3.6: 全局玻璃透明度四档（默认中 = 3.5 外观）

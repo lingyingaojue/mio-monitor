@@ -16,8 +16,8 @@ android {
         applicationId = "com.a41probe.monitor"
         minSdk = 26
         targetSdk = 37
-        versionCode = 430
-        versionName = "3.13.0"
+        versionCode = 440
+        versionName = "3.14.0"
     }
 
     buildTypes {

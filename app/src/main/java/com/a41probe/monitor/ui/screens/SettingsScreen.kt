@@ -3,6 +3,7 @@ package com.a41probe.monitor.ui.screens
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -63,6 +64,8 @@ import androidx.compose.ui.unit.sp
 import com.a41probe.monitor.BuildConfig
 import com.a41probe.monitor.data.MonitorViewModel
 import com.a41probe.monitor.data.RootBridge
+import com.a41probe.monitor.data.RootState
+import com.a41probe.monitor.data.RootStatus
 import com.a41probe.monitor.data.ShizukuBridge
 import com.a41probe.monitor.data.ThermalReader
 import com.a41probe.monitor.ui.components.DotBadge
@@ -431,6 +434,48 @@ private fun launchShizuku(ctx: Context) {
     }
 }
 
+/** v3.14：Root 授权状态 → 设置页文案/颜色。 */
+private fun rootStatusSummary(status: RootStatus): String = when (status.state) {
+    RootState.ACTIVE -> status.detail ?: "Root 已激活 · 读写优先"
+    RootState.MANAGER_ONLY -> status.detail
+        ?: "检测到 ${status.managerLabel ?: "Root 管理器"}，但 su 当前不可用；请在管理器中授权"
+    RootState.DENIED -> status.detail ?: "Root 授权被拒绝 · 点下方重试"
+    RootState.NOT_FOUND -> "未检测到 Root 管理器或 su（无 Root 时用 Shizuku 解锁 S 档项）"
+    RootState.UNKNOWN -> "Root 状态未知 · 点下方检测"
+}
+
+private fun rootStatusColor(status: RootStatus): Color = when (status.state) {
+    RootState.ACTIVE -> Ink.warn
+    RootState.MANAGER_ONLY -> Ink.warn
+    RootState.DENIED -> Ink.danger
+    else -> Ink.off
+}
+
+private fun rootStatusBadge(status: RootStatus): String = when (status.state) {
+    RootState.ACTIVE -> "已激活"
+    RootState.MANAGER_ONLY -> "待授权"
+    RootState.DENIED -> "已拒绝"
+    RootState.NOT_FOUND -> "未检测到"
+    RootState.UNKNOWN -> "未检测"
+}
+
+/** 打开 KernelSU Next / KernelSU / Magisk / APatch 管理器；没有启动入口则打开应用详情。 */
+private fun launchRootManager(ctx: Context, packageName: String) {
+    val pm = ctx.packageManager
+    val launch = pm.getLaunchIntentForPackage(packageName)
+    if (launch != null) {
+        runCatching { ctx.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { Toast.makeText(ctx, "无法打开 Root 管理器", Toast.LENGTH_SHORT).show() }
+        return
+    }
+    val details = Intent(
+        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        android.net.Uri.parse("package:$packageName"),
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { ctx.startActivity(details) }
+        .onFailure { Toast.makeText(ctx, "未找到 Root 管理器入口", Toast.LENGTH_SHORT).show() }
+}
+
 /** 设置：外观 · 提权通道 · 双模式 · 采样 · 数据 · 设备信息 · 关于（BiliPai 分组列表） */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -455,6 +500,7 @@ fun SettingsScreen(
     var artworkSize by remember { mutableStateOf(ThemeConfig.artworkSize()) }
     var textureMode by remember { mutableStateOf(InterfaceTextureConfig.current()) }
     var hapticSel by remember { mutableStateOf(MioHaptics.current()) }
+    var rootBusy by remember { mutableStateOf(false) }
     var specSel by remember { mutableStateOf<SpecialTheme>(SpecialConfig.current()) }
     val haptics = rememberHaptics()
     val animScale = rememberAnimatorScale()
@@ -600,51 +646,67 @@ fun SettingsScreen(
                                     else -> "未启动"
                                 },
                             )
+                            val rootStatus = snap.rootStatus
                             StatusBadgeRow(
                                 title = "Root",
-                                subtitle = if (snap.rootAvailable) {
-                                    "已检测到 su · Root 优先，R 档项已解锁"
-                                } else {
-                                    "未检测到 su（无 Root 时用 Shizuku 解锁 S 档项）"
-                                },
-                                // v20.12(S2-16): Root 徽章用橙色，与顶栏 Root 语义统一
-                                badgeColor = if (snap.rootAvailable) Ink.warn else Ink.off,
-                                badgeText = if (snap.rootAvailable) "已激活" else "未激活",
+                                subtitle = rootStatusSummary(rootStatus),
+                                badgeColor = rootStatusColor(rootStatus),
+                                badgeText = rootStatusBadge(rootStatus),
                             )
                             Column(
                                 Modifier.fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 8.dp),
                             ) {
-                                // v20.14: 一键授权（优先 Root；无 Root 用 Shizuku）——IO 异步，不卡 UI
+                                // v3.14: 显式 Root 授权——等待管理器弹窗，失败时打开管理器
                                 val authScope = rememberCoroutineScope()
                                 ProbeButton(
-                                    text = "一键授权（优先 Root）",
-                                    accent = !(snap.rootAvailable || snap.shizukuActive),
+                                    text = if (rootBusy) "正在等待 Root 授权…" else "检测并授权 Root",
+                                    accent = !(rootStatus.isActive || snap.shizukuActive),
                                     onClick = {
-                                        authScope.launch {
-                                            val gotRoot = withContext(Dispatchers.IO) {
-                                                RootBridge.refresh()
-                                                RootBridge.available
-                                            }
-                                            if (gotRoot) {
-                                                withContext(Dispatchers.Main) { vm.refreshShizuku() }
-                                                return@launch
-                                            }
-                                            val active = withContext(Dispatchers.IO) { ShizukuBridge.refresh() }
-                                            if (active) {
-                                                if (!ShizukuBridge.authorized) ShizukuBridge.requestPermission()
-                                                withContext(Dispatchers.Main) { vm.refreshShizuku() }
-                                            } else {
-                                                Toast.makeText(
-                                                    ctx,
-                                                    "未检测到 Root / Shizuku 服务，当前为免提权模式",
-                                                    Toast.LENGTH_LONG,
-                                                ).show()
+                                        if (!rootBusy) {
+                                            rootBusy = true
+                                            authScope.launch {
+                                                val st = vm.authorizeRoot()
+                                                rootBusy = false
+                                                if (st.isActive) {
+                                                    Toast.makeText(
+                                                        ctx,
+                                                        "Root 已激活 · 读写通道优先",
+                                                        Toast.LENGTH_SHORT,
+                                                    ).show()
+                                                    vm.refreshShizuku()
+                                                } else {
+                                                    Toast.makeText(
+                                                        ctx,
+                                                        st.detail ?: "未获得 Root",
+                                                        Toast.LENGTH_LONG,
+                                                    ).show()
+                                                    st.managerPackage?.let { launchRootManager(ctx, it) }
+                                                    val active = withContext(Dispatchers.IO) {
+                                                        ShizukuBridge.refresh()
+                                                    }
+                                                    if (active) {
+                                                        if (!ShizukuBridge.authorized) {
+                                                            ShizukuBridge.requestPermission()
+                                                        }
+                                                        vm.refreshShizuku()
+                                                    }
+                                                }
                                             }
                                         }
                                     },
                                     modifier = Modifier.fillMaxWidth(),
                                 )
+                                if (rootStatus.managerPackage != null) {
+                                    Spacer(Modifier.height(8.dp))
+                                    ProbeButton(
+                                        text = "打开 ${rootStatus.managerLabel ?: "Root 管理器"}",
+                                        onClick = {
+                                            launchRootManager(ctx, rootStatus.managerPackage!!)
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                }
                                 Spacer(Modifier.height(8.dp))
                                 // UX(M27): 给新用户一条"获得 Shizuku"的明确路径
                                 ProbeButton(

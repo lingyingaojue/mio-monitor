@@ -163,7 +163,8 @@ object OriginSettingsBridge {
         values: Map<ToolboxKey, String?>,
     ): Boolean {
         val exec: (String) -> String? = when (channel) {
-            ToolboxWriteChannel.ROOT -> { cmd -> RootBridge.exec(cmd) }
+            // v3.14: Root 写路径包含 app_process 冷启动，给 8s 超时（读路径仍 2.5s）
+            ToolboxWriteChannel.ROOT -> { cmd -> RootBridge.exec(cmd, timeoutMs = 8_000L) }
             ToolboxWriteChannel.SHIZUKU -> { cmd -> ShizukuBridge.exec(cmd) }
             else -> return false
         }

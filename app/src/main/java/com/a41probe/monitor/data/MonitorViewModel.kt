@@ -100,6 +100,7 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
         val shizukuActive: Boolean = false,
         val shizukuServiceUp: Boolean = false,
         val rootAvailable: Boolean = false,
+        val rootStatus: RootStatus = RootStatus(),
     )
 
     private var job: Job? = null
@@ -237,7 +238,12 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
         if (s.halTemps != _halFlow.value) _halFlow.value = s.halTemps
         if (s.thermalStatus != _thermalStatusFlow.value) _thermalStatusFlow.value = s.thermalStatus
         if (s.thresholds != _thresholdsFlow.value) _thresholdsFlow.value = s.thresholds
-        val pu = PrivUi(s.shizukuActive, s.shizukuServiceUp, s.rootAvailable)
+        val pu = PrivUi(
+            s.shizukuActive,
+            s.shizukuServiceUp,
+            s.rootAvailable,
+            RootBridge.status(),
+        )
         if (pu != _privFlow.value) _privFlow.value = pu
     }
 
@@ -287,6 +293,16 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
                 _lastSuccessAt.value = System.currentTimeMillis()
             }
         }
+    }
+
+    /** 用户显式发起 Root 授权：等待管理器弹窗（默认 20s），完成后刷新权限状态。 */
+    suspend fun authorizeRoot(waitMs: Long = 20_000L): RootStatus {
+        val status = withContext(Dispatchers.IO) { RootBridge.authorize(waitMs) }
+        withContext(Dispatchers.Main) {
+            _snapshot.value = _snapshot.value.copy(rootAvailable = status.isActive)
+            syncDerived(_snapshot.value)
+        }
+        return status
     }
 
     fun refreshShizuku() {
