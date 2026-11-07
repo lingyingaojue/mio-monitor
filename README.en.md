@@ -124,6 +124,12 @@ See [docs/UPSTREAM_SOURCE.md](docs/UPSTREAM_SOURCE.md) for details.
 - [Third-party components and licenses](THIRD_PARTY_NOTICES.md)
 - [Source baseline](docs/UPSTREAM_SOURCE.md)
 
+## Contributing
+
+- [Contributing guide](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- README languages: [简体中文](README.md) · [日本語](README.ja.md)
+
 ## Credits
 
 - Upstream [Mio / PRTS168](https://github.com/PRTS168/mio-monitor): original monitoring core and data model;

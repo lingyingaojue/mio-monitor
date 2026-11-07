@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 下载最新版本
+    url: https://github.com/lingyingaojue/mio-monitor/releases/latest
+    about: 先确认问题是否已在最新 Release 上修复。
+  - name: 多语言 README
+    url: https://github.com/lingyingaojue/mio-monitor#readme
+    about: 简体中文 / English / 日本語 使用说明与权限说明。
+  - name: 安全报告
+    url: https://github.com/lingyingaojue/mio-monitor/security/policy
+    about: 安全漏洞请勿公开提交，使用私密安全通告。

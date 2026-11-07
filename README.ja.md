@@ -124,6 +124,12 @@ powershell -ExecutionPolicy Bypass -File tools/verify-upstream-source.ps1
 - [サードパーティ製コンポーネントとライセンス](THIRD_PARTY_NOTICES.md)
 - [ソースベース](docs/UPSTREAM_SOURCE.md)
 
+## コントリビュート
+
+- [コントリビュートガイド](CONTRIBUTING.md)
+- [セキュリティポリシー](SECURITY.md)
+- README の言語：[简体中文](README.md) · [English](README.en.md)
+
 ## 謝辞
 
 - 上流 [Mio / PRTS168](https://github.com/PRTS168/mio-monitor)：元の監視コアとデータモデル；
