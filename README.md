@@ -8,7 +8,7 @@
 
 <br/>
 
-![Version](https://img.shields.io/badge/version-v3.14-007AFF)
+![Version](https://img.shields.io/badge/version-v3.15-007AFF)
 ![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.4-7F52FF?logo=kotlin&logoColor=white)
 ![Compose](https://img.shields.io/badge/Jetpack%20Compose-Miuix-4285F4?logo=jetpackcompose&logoColor=white)
@@ -24,6 +24,8 @@
 ---
 
 Mio 澪 是一款安卓硬件参数与性能监控应用。它把设备能够读到的硬件信息，尽可能完整、准确地呈现出来：CPU 每核频率与占用、GPU 负载与频率、电池电压电流功率与健康度、几十路热区温度与散热动作、内存与传感器。
+
+**v3.15 Monster+（Root 专用）**：在实验功能新增 Monster+ 模式开关，Root 写入 `Settings.System.game_plus_mode_key`，回读校验、可恢复；仅 vivo/iQOO 支持，ADB 直写 / Shizuku 不会冒充。
 
 **v3.14 Root 授权与读写完善**：自动识别 KernelSU Next / KernelSU / Magisk / APatch，支持多路径 su 探测与显式授权等待；设置页可一键检测 Root、打开 Root 管理器；Root 激活后所有读取优先走 Root，Toolbox 写入使用 Root 长超时并回读校验。**v3.13 温度页中文化 + 无数据隐藏**：热区/冷却设备/HAL 标签能翻则翻（CPU/GPU/NPU/ToF/Wi-Fi 等通用缩写保留），型号名保留原文；读不到的温度（null/0/负值/NaN）、无 cur/max 的冷却设备、无效 HAL 行、空外壳侧、空分组/网格全部自动隐藏，只留真实可读数据。**v3.12 温度页 ADB 全量热数据**：动态读取全部热区（本机 95 个 zone，过滤后约 80+ 个有效温度）、全部 64 个 cooling_device、每区 trip 阈值与 Thermal HAL 官方温度；CPU / GPU 卡片改成与「热缓解动作」同款折叠菜单，默认 Top-5、展开看全部（含 HAL 温度与降频阈值）；热缓解动作展开可看全部冷却设备；底部网格不再固定 84 格。**v3.11 触感强度修复 + 立绘四档**：触感改为「波形节奏 + 时长 + 振幅」三重区分（轻/中/重按住与点按都能明显区分，不再依赖 ROM 是否尊重振幅）；「显示角色立绘」开关改为与「界面质感」同款四选一——**关闭 / 小 / 中 / 大**（300/420/540dp，默认中=旧观感），旧开关 true→中、false→关闭自动迁移。**v3.10 设置收敛为「界面质感」**：把「液态玻璃 / 玻璃透明度 / 玻璃引擎 / 底部导航栏」四行合并为一个三选一——**关闭**（Mio 最初样式：实色卡片 + Mio 简版底栏）、**Mio 简版**（半透卡片 + Mio 简版底栏）、**全透**（全透玻璃卡片 + BiliPai 液态底栏）；旧四档/旧底栏设置启动时自动迁移，重启保持。**v3.9 全透卡片玻璃与弹窗可读性**：卡片改用 PrismalAGSL 的 `drawPrismalGlass` 直接绘制——去掉白色 specular/提亮，只保留真实 lens 折射（24/64dp + 55% RGB 色散）、黑色悬浮投影和 1px 白边；第四档透明度由「极高」改为「全透」（卡片 tint=0、blur=0，立绘直接透出）；删除人工红蓝描边；弹窗固定 0.92 不透明底色 + 窗口模糊，底部弹层保留 ≥0.72 填充，解决文字看不清。**v3.8 卡片玻璃接入 [PrismalAGSL](https://github.com/styropyr0/PrismalAGSL)**：卡片改用库的 backdrop 液态玻璃；顶栏/dock/选中胶囊同步开启色散；API<33/LITE 保留 Haze 降级。**v3.7 玻璃质感对齐 OriginOS「高级材质」**：全面下调玻璃填充浓度、卡片模糊提到 32dp，并给 Haze 卡片加饱和度增艳（透彩色），四档透明度以「低」为 OriginOS 参考档、中/高/极高逐级更透；顶栏、卡片、dock、弹层同步生效。**v3.6 全局玻璃透明度**：外观新增低 / 中 / 高 / 极高四档，统一缩放顶栏、返回条、卡片、底部 dock（BiliPai 与 Mio 简版两条路径）与弹层的玻璃填充浓度，默认「中」与 v3.5 外观一致。**v3.5 OriginOS 实验调校**：把 ADB 实测可用的 4 项系统设置做成开关（触控拉满 / 强开全局插帧 / 全局高刷锁定 / 全局视效增强），默认全关、首次进入需确认风险，支持一键恢复默认与恢复原始值；写入通道自动选择（ADB 授权 / Root / Shizuku），每次都回读校验；system 类 key 需 Shizuku / Root。**v3.4 底部导航栏直接使用 BiliPai 原版组件**（vendor BiliPai v0.7.8 的 `FloatingBottomBar` 及依赖闭包，Mio 只做 tab 状态映射）。**v3.3** 顶栏/返回条接入 Miuix Backdrop 光学链（背板录制 + 增艳 + 实时模糊 + 边缘折射/色散 + Bloom 高光 + 悬浮投影）；**v3.2** 下调玻璃填充不透明度；**v3.1** 接入 Haze 实时背景模糊。BiliPai 源码搬运清单见 [design-system/VENDORED.md](design-system/VENDORED.md)。
 

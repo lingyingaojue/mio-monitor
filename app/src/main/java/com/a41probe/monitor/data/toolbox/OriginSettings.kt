@@ -29,6 +29,8 @@ enum class ToolboxFeature(
     val title: String,
     val summary: String,
     val risk: String,
+    /** v3.15: Root 专用功能，禁止用 ADB 直写/Shizuku 冒充。 */
+    val requiresRoot: Boolean = false,
 ) {
     TOUCH_BOOST(
         id = "touch_boost",
@@ -54,6 +56,13 @@ enum class ToolboxFeature(
         summary = "提高画面色彩对比度（GameCube 读取 gamecube_hawkeye_effective）",
         risk = "仅改 hawkeye 这一个 key，不修改色彩模式，避免偏色。",
     ),
+    MONSTER_PLUS(
+        id = "monster_plus",
+        title = "Monster+ 模式",
+        summary = "vivo/iQOO 性能调度模式（PEM/GameCube 读取 game_plus_mode_key）",
+        risk = "性能调度更激进，发热和耗电明显增加；仅建议游戏时开，Root 专用。",
+        requiresRoot = true,
+    ),
 }
 
 /** 各功能涉及的 settings key（固定白名单）。 */
@@ -70,6 +79,9 @@ fun keysOf(feature: ToolboxFeature): List<ToolboxKey> = when (feature) {
     )
     ToolboxFeature.VISUAL_ENHANCE -> listOf(
         ToolboxKey(ToolboxNamespace.SYSTEM, "gamecube_hawkeye_effective"),
+    )
+    ToolboxFeature.MONSTER_PLUS -> listOf(
+        ToolboxKey(ToolboxNamespace.SYSTEM, "game_plus_mode_key"),
     )
 }
 
@@ -133,6 +145,9 @@ fun resolveFeatureOn(feature: ToolboxFeature, values: Map<String, String?>): Boo
     }
     ToolboxFeature.VISUAL_ENHANCE ->
         values[keyName(ToolboxFeature.VISUAL_ENHANCE)] == "1"
+    ToolboxFeature.MONSTER_PLUS ->
+        // PEM PsmObserver 用 >0 判断开启；GameCube 面板用 ==1；两者都覆盖
+        (values[keyName(ToolboxFeature.MONSTER_PLUS)]?.toIntOrNull() ?: 0) > 0
 }
 
 private fun keyName(feature: ToolboxFeature): String {
@@ -149,6 +164,7 @@ fun valuesToWrite(feature: ToolboxFeature, interp: FrameInterpolationValue, refr
     ToolboxFeature.FRAME_INTERPOLATION -> mapOf(keysOf(feature).first() to interp.format())
     ToolboxFeature.REFRESH_LOCK -> keysOf(feature).associateWith { refreshValueOf(refreshHz) }
     ToolboxFeature.VISUAL_ENHANCE -> mapOf(keysOf(feature).first() to "1")
+    ToolboxFeature.MONSTER_PLUS -> mapOf(keysOf(feature).first() to "1")
 }
 
 /* ---------------- shell 命令构造（Shizuku / Root 通道） ---------------- */
@@ -213,6 +229,13 @@ fun isOriginTuningSupported(
     return m.contains("vivo") || b.contains("vivo") || b.contains("iqoo") ||
         d.contains("pd") || d.contains("vivo")
 }
+
+/** v3.15: Monster+ 仅 vivo/iQOO OriginOS 机型展示；实际写入前仍需 Root。 */
+fun isMonsterPlusSupported(
+    manufacturer: String = Build.MANUFACTURER ?: "",
+    brand: String = Build.BRAND ?: "",
+    display: String = Build.DISPLAY ?: "",
+): Boolean = isOriginTuningSupported(manufacturer, brand, display)
 
 /** 功能状态（UI 展示 + 守护判定）。 */
 enum class ToolboxFeatureState { ON, OFF, ABSENT, UNKNOWN }

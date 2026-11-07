@@ -99,7 +99,15 @@ object OriginSettingsBridge {
         feature: ToolboxFeature,
         values: Map<ToolboxKey, String?>,
     ): WriteOutcome = writeMutex.withLock {
-        val channel = channelStatus(ctx).preferred
+        val status = channelStatus(ctx)
+        if (feature.requiresRoot && !status.root) {
+            return@withLock WriteOutcome(
+                false,
+                ToolboxWriteChannel.NONE,
+                "Monster+ 需要 Root（ADB 直写 / Shizuku 不生效）",
+            )
+        }
+        val channel = if (feature.requiresRoot) ToolboxWriteChannel.ROOT else status.preferred
         if (channel == ToolboxWriteChannel.NONE) {
             return@withLock WriteOutcome(false, channel, "需要 Shizuku / Root（system 类设置无法用 App 的 ADB 直写）")
         }
@@ -111,12 +119,8 @@ object OriginSettingsBridge {
         }
         // 按可用通道依次尝试；vivo 的直写在 system 命名空间可能只删不写，
         // 因此必须回读校验，失败自动降级到 Root/Shizuku shell 通道。
-        val status = channelStatus(ctx)
-        val candidates = buildList {
-            add(ToolboxWriteChannel.DIRECT)
-            if (status.root) add(ToolboxWriteChannel.ROOT)
-            if (status.shizuku) add(ToolboxWriteChannel.SHIZUKU)
-        }.distinct()
+        // Root 专用功能（Monster+）只允许 ROOT，不能拿直写/Shizuku 冒充。
+        val candidates = candidateChannels(feature, status)
         var lastError: String? = null
         var lastChannel = channel
         for (candidate in candidates) {
@@ -141,6 +145,21 @@ object OriginSettingsBridge {
             lastError = "写入未生效（系统可能拦截）：${mismatch.key.name}"
         }
         WriteOutcome(false, lastChannel, lastError ?: "写入失败")
+    }
+
+    /** 写入通道候选；Monster+ 等 Root 专用功能只返回 ROOT。纯逻辑，供单测覆盖。 */
+    internal fun candidateChannels(
+        feature: ToolboxFeature,
+        status: ToolboxChannelStatus,
+    ): List<ToolboxWriteChannel> {
+        if (feature.requiresRoot) {
+            return if (status.root) listOf(ToolboxWriteChannel.ROOT) else emptyList()
+        }
+        return buildList {
+            add(ToolboxWriteChannel.DIRECT)
+            if (status.root) add(ToolboxWriteChannel.ROOT)
+            if (status.shizuku) add(ToolboxWriteChannel.SHIZUKU)
+        }.distinct()
     }
 
     private fun writeDirect(ctx: Context, values: Map<ToolboxKey, String?>): Boolean = try {

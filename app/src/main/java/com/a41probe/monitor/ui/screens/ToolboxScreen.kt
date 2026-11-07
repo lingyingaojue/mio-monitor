@@ -50,6 +50,7 @@ import com.a41probe.monitor.data.toolbox.ToolboxConfig
 import com.a41probe.monitor.data.toolbox.ToolboxController
 import com.a41probe.monitor.data.toolbox.ToolboxFeature
 import com.a41probe.monitor.data.toolbox.ToolboxFeatureState
+import com.a41probe.monitor.data.toolbox.isMonsterPlusSupported
 import com.a41probe.monitor.ui.components.MioCard
 import com.a41probe.monitor.ui.components.MioChoiceRow
 import com.a41probe.monitor.ui.components.MioInfoRow
@@ -161,7 +162,8 @@ fun ToolboxScreen(onBack: () -> Unit = {}) {
                             Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp)) {
                                 Text(
                                     "触控拉满可走 ADB 授权直写；插帧 / 高刷锁定 / 视觉增强属 system 设置，" +
-                                        "Android 17 上 App 直写会被系统拒绝，需要授权 Shizuku 或 Root。",
+                                        "Android 17 上 App 直写会被系统拒绝，需要授权 Shizuku 或 Root。" +
+                                        "Monster+ 为 Root 专用，Shizuku / ADB 直写不会生效。",
                                     color = Ink.tx2, fontSize = 12.sp, lineHeight = 17.sp,
                                 )
                                 Spacer(Modifier.height(6.dp))
@@ -211,7 +213,9 @@ fun ToolboxScreen(onBack: () -> Unit = {}) {
                             state = state,
                             feature = feature,
                             enabled = writable && !state.busy &&
-                                (feature == ToolboxFeature.TOUCH_BOOST || systemWritable),
+                                (feature == ToolboxFeature.TOUCH_BOOST || systemWritable) &&
+                                (!feature.requiresRoot || state.channel.root) &&
+                                (feature != ToolboxFeature.MONSTER_PLUS || isMonsterPlusSupported()),
                             onToggle = { on ->
                                 if (on) pendingToggle = feature
                                 else ToolboxController.setFeature(ctx, feature, false)

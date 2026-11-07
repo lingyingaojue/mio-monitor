@@ -141,6 +141,10 @@ object ToolboxController {
             val v = values["system.gamecube_hawkeye_effective"]
             "当前值：${v ?: "未设置（默认）"}"
         }
+        ToolboxFeature.MONSTER_PLUS -> {
+            val v = values["system.game_plus_mode_key"]
+            "当前值：${v ?: "未设置（默认）"}"
+        }
     }
 
     /* ---------------- 写操作 ---------------- */

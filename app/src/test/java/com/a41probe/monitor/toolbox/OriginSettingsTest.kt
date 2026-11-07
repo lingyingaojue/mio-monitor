@@ -2,13 +2,17 @@ package com.a41probe.monitor.toolbox
 
 import com.a41probe.monitor.data.toolbox.FrameInterpolationValue
 import com.a41probe.monitor.data.toolbox.INTERPOLATION_PRESETS
+import com.a41probe.monitor.data.toolbox.OriginSettingsBridge
 import com.a41probe.monitor.data.toolbox.REFRESH_TARGETS
+import com.a41probe.monitor.data.toolbox.ToolboxChannelStatus
 import com.a41probe.monitor.data.toolbox.ToolboxFeature
 import com.a41probe.monitor.data.toolbox.ToolboxKey
 import com.a41probe.monitor.data.toolbox.ToolboxNamespace
+import com.a41probe.monitor.data.toolbox.ToolboxWriteChannel
 import com.a41probe.monitor.data.toolbox.deleteCommand
 import com.a41probe.monitor.data.toolbox.deleteScript
 import com.a41probe.monitor.data.toolbox.insertCommand
+import com.a41probe.monitor.data.toolbox.isMonsterPlusSupported
 import com.a41probe.monitor.data.toolbox.isOriginTuningSupported
 import com.a41probe.monitor.data.toolbox.isValidKeyName
 import com.a41probe.monitor.data.toolbox.isValidSettingValue
@@ -189,5 +193,51 @@ class OriginSettingsTest {
         assertTrue(isOriginTuningSupported("iQOO", "vivo", ""))
         assertFalse(isOriginTuningSupported("samsung", "samsung", "UP1A.231005.007"))
         assertFalse(isOriginTuningSupported("Google", "google", "sdk_gphone64_x86_64"))
+    }
+
+    @Test
+    fun monsterPlusUsesSystemGamePlusKeyAndIsRootOnly() {
+        val key = ToolboxKey(ToolboxNamespace.SYSTEM, "game_plus_mode_key")
+        assertEquals(listOf(key), keysOf(ToolboxFeature.MONSTER_PLUS))
+        assertEquals(
+            mapOf(key to "1"),
+            valuesToWrite(ToolboxFeature.MONSTER_PLUS, FrameInterpolationValue(30, 120), refreshHz = 144),
+        )
+        assertTrue(ToolboxFeature.MONSTER_PLUS.requiresRoot)
+        assertFalse(ToolboxFeature.TOUCH_BOOST.requiresRoot)
+        assertTrue(
+            resolveFeatureOn(ToolboxFeature.MONSTER_PLUS, mapOf("system.game_plus_mode_key" to "1")),
+        )
+        assertTrue(
+            // PEM 用 >0 判断；GameCube 面板用 ==1，这里覆盖两者
+            resolveFeatureOn(ToolboxFeature.MONSTER_PLUS, mapOf("system.game_plus_mode_key" to "2")),
+        )
+        assertFalse(
+            resolveFeatureOn(ToolboxFeature.MONSTER_PLUS, mapOf("system.game_plus_mode_key" to "0")),
+        )
+        assertFalse(resolveFeatureOn(ToolboxFeature.MONSTER_PLUS, emptyMap()))
+
+        assertTrue(isMonsterPlusSupported("vivo", "vivo", "PD2301D_A_16.3.17.0.W10"))
+        assertTrue(isMonsterPlusSupported("iQOO", "vivo", ""))
+        assertFalse(isMonsterPlusSupported("Google", "google", "sdk_gphone64_x86_64"))
+    }
+
+    @Test
+    fun monsterPlusCannotFallBackToDirectOrShizuku() {
+        val full = ToolboxChannelStatus(direct = true, root = true, shizuku = true)
+        assertEquals(
+            listOf(ToolboxWriteChannel.ROOT),
+            OriginSettingsBridge.candidateChannels(ToolboxFeature.MONSTER_PLUS, full),
+        )
+        assertEquals(
+            listOf(
+                ToolboxWriteChannel.DIRECT,
+                ToolboxWriteChannel.ROOT,
+                ToolboxWriteChannel.SHIZUKU,
+            ),
+            OriginSettingsBridge.candidateChannels(ToolboxFeature.TOUCH_BOOST, full),
+        )
+        val noRoot = ToolboxChannelStatus(direct = true, root = false, shizuku = true)
+        assertTrue(OriginSettingsBridge.candidateChannels(ToolboxFeature.MONSTER_PLUS, noRoot).isEmpty())
     }
 }
